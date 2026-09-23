@@ -37,6 +37,54 @@ class GeminiVertex
         return $result;
     }
 
+    /**
+     * Diagnostika: shu loyiha/region uchun Vertex AI'da haqiqatda MAVJUD bo'lgan
+     * Google modellarini so'rab ko'radi (model nomlarini taxmin qilib sinash o'rniga).
+     *
+     * @return array<int, array{name: string, generateContent: bool}>
+     */
+    public function listModels(): array
+    {
+        $url = sprintf(
+            'https://%s-aiplatform.googleapis.com/v1/publishers/google/models?pageSize=1000',
+            $this->location
+        );
+        $token = $this->getAccessToken();
+
+        $ch = curl_init($url);
+        Http::applyCaBundle($ch);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $token,
+                'x-goog-user-project: ' . $this->projectId,
+            ],
+        ]);
+        $body = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+
+        if ($body === false || $status !== 200) {
+            throw new RuntimeException("Modellar ro'yxatini olishda xato ($status): " . mb_substr((string) $body, 0, 500));
+        }
+
+        $data = json_decode($body, true) ?? [];
+        $models = [];
+        foreach ($data['publisherModels'] ?? [] as $m) {
+            $name = $m['name'] ?? '';
+            // Faqat "gemini" so'zi bor modellarni ko'rsatamiz (gemma, imagen, veo va h.k.ni yashiramiz)
+            if (str_contains($name, 'gemini')) {
+                $methods = $m['supportedActions']['generateContent'] ?? $m['supportedGenerationMethods'] ?? null;
+                $models[] = [
+                    'name' => $name,
+                    'generateContent' => $methods !== null,
+                ];
+            }
+        }
+        return $models;
+    }
+
     protected function generate(string $system, string $user, float $temperature, string $model): array
     {
         $main = $this->smartModel ? $this->smartModel : $this->fastModel;

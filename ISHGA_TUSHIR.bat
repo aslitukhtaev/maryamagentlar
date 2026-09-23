@@ -23,6 +23,13 @@ echo.
 echo [3/3] Vertex AI tekshirilmoqda...
 echo.
 php bin\test-vertex.php
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo ------------------------------------------------
+    echo   Model bilan muammo bolsa - mavjud modellar:
+    echo ------------------------------------------------
+    php bin\list-vertex-models.php
+)
 
 echo.
 echo ============================================
