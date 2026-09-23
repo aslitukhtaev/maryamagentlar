@@ -50,7 +50,8 @@ function appVertex(): array
 {
     static $app = null;
     if ($app === null) {
-        $projectId = Maryam\Env::get('GOOGLE_CLOUD_PROJECT_ID', '');
+        // Zaxira qiymat: .env eskirgan/bo'sh bo'lsa ham loyiha ishlab tursin
+        $projectId = Maryam\Env::get('GOOGLE_CLOUD_PROJECT_ID', '') ?: 'project-990aebdb-5252-4043-862';
         $location = Maryam\Env::get('GOOGLE_CLOUD_LOCATION', 'us-central1');
         
         $app = [
