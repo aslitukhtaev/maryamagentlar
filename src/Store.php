@@ -1,0 +1,105 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Maryam;
+
+use PDO;
+
+/**
+ * Bazaga yozish/o'qishning hammasi shu yerda — agentlar SQL bilan ovora bo'lmaydi.
+ */
+final class Store
+{
+    public function __construct(public readonly PDO $db)
+    {
+    }
+
+    public function saveBrief(array $b): int
+    {
+        $this->db->prepare('INSERT INTO briefs (topic, tourism_type, goal, details, audience, language)
+                            VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([$b['topic'], $b['tourism_type'], $b['goal'], $b['details'], $b['audience'], $b['language']]);
+        return (int) $this->db->lastInsertId();
+    }
+
+    public function brief(int $id): ?array
+    {
+        $st = $this->db->prepare('SELECT * FROM briefs WHERE id = ?');
+        $st->execute([$id]);
+        return $st->fetch() ?: null;
+    }
+
+    public function recentBriefs(int $limit = 30): array
+    {
+        return $this->db->query('SELECT * FROM briefs ORDER BY id DESC LIMIT ' . $limit)->fetchAll();
+    }
+
+    /** AI chaqiruvini jurnalga yozadi. */
+    public function logRun(?int $briefId, string $agent, string $step, string $input, array $result): void
+    {
+        $this->db->prepare('INSERT INTO agent_runs (brief_id, agent, step, model, input, output, tokens_in, tokens_out, duration_ms)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            ->execute([$briefId, $agent, $step, $result['model'], $input, $result['text'],
+                       $result['tokens_in'], $result['tokens_out'], $result['ms']]);
+    }
+
+    public function saveResult(int $briefId, string $agent, string $kind, array $data): void
+    {
+        $this->db->prepare('INSERT INTO agent_results (brief_id, agent, kind, data) VALUES (?, ?, ?, ?)')
+            ->execute([$briefId, $agent, $kind, json_encode($data, JSON_UNESCAPED_UNICODE)]);
+    }
+
+    public function result(int $briefId, string $agent, string $kind): ?array
+    {
+        $st = $this->db->prepare('SELECT data FROM agent_results WHERE brief_id = ? AND agent = ? AND kind = ?
+                                  ORDER BY id DESC LIMIT 1');
+        $st->execute([$briefId, $agent, $kind]);
+        $row = $st->fetch();
+        return $row ? json_decode($row['data'], true) : null;
+    }
+
+    public function saveVariant(int $briefId, array $v): int
+    {
+        $this->db->prepare('INSERT INTO copy_variants (brief_id, kind, angle, framework, data, score)
+                            VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([$briefId, $v['kind'], $v['angle'], $v['framework'],
+                       json_encode($v, JSON_UNESCAPED_UNICODE), $v['score'] ?? 0]);
+        return (int) $this->db->lastInsertId();
+    }
+
+    public function variants(int $briefId): array
+    {
+        $st = $this->db->prepare('SELECT * FROM copy_variants WHERE brief_id = ? ORDER BY id');
+        $st->execute([$briefId]);
+        return array_map(fn ($r) => ['db_id' => (int) $r['id'], 'rating' => $r['rating'], 'feedback' => $r['feedback']]
+            + json_decode($r['data'], true), $st->fetchAll());
+    }
+
+    /** Inson bahosi: 1 (yomon) .. 5 (a'lo) + ixtiyoriy izoh. */
+    public function rate(int $variantId, int $rating, string $feedback = ''): bool
+    {
+        $st = $this->db->prepare('UPDATE copy_variants SET rating = ?, feedback = ? WHERE id = ?');
+        $st->execute([max(1, min(5, $rating)), $feedback, $variantId]);
+        return $st->rowCount() > 0;
+    }
+
+    /**
+     * Shu turizm turi bo'yicha oldin baholangan variantlar.
+     * Copywriter ularni "yaxshi namuna" / "yomon namuna" sifatida o'rganadi.
+     */
+    public function ratedExamples(string $tourismType, bool $good, int $limit = 3): array
+    {
+        $cond = $good ? 'v.rating >= 4' : 'v.rating <= 2';
+        $st = $this->db->prepare("SELECT v.data, v.rating, v.feedback FROM copy_variants v
+                                  JOIN briefs b ON b.id = v.brief_id
+                                  WHERE b.tourism_type = ? AND $cond
+                                  ORDER BY v.rating " . ($good ? 'DESC' : 'ASC') . ", v.id DESC LIMIT $limit");
+        $st->execute([$tourismType]);
+        return array_map(fn ($r) => [
+            'rating' => (int) $r['rating'],
+            'feedback' => $r['feedback'],
+            'variant' => array_diff_key(json_decode($r['data'], true), array_flip(['scores', 'issues', 'changes', 'score', 'warnings', 'db_id'])),
+        ], $st->fetchAll());
+    }
+}

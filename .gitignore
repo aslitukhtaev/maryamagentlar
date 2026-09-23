@@ -1,0 +1,8 @@
+# Maxfiy kalitlar — hech qachon gitga tushmasin
+.env
+
+# Ma'lumotlar bazasi va natijalar — har bir kompyuterda o'ziniki
+data/*.db
+data/*.db-*
+output/*
+!output/.gitkeep
