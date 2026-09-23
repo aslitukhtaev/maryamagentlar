@@ -6,3 +6,9 @@ data/*.db
 data/*.db-*
 output/*
 !output/.gitkeep
+
+# Google Cloud service account key — maxfiy, hech qachon gitga tushmaydi
+service-account-key.json
+*.service-account.json
+key.json
+GOOGLE_APPLICATION_CREDENTIALS

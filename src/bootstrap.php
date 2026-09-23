@@ -41,3 +41,29 @@ function app(): array
     }
     return $app;
 }
+
+/**
+ * Vertex AI (Google Cloud billing va trial krediti bilan).
+ * Developer API o'rniga buni ishlatsangiz — $300 trial krediti ishlatiladi.
+ */
+function appVertex(): array
+{
+    static $app = null;
+    if ($app === null) {
+        $projectId = Maryam\Env::get('GOOGLE_CLOUD_PROJECT_ID', '');
+        $location = Maryam\Env::get('GOOGLE_CLOUD_LOCATION', 'us-central1');
+        
+        $app = [
+            'ai'    => new Maryam\GeminiVertex(
+                $projectId,
+                $location,
+                Maryam\Env::get('GEMINI_MODEL', 'gemini-2.5-flash'),
+                Maryam\Env::get('GEMINI_MODEL_SMART', 'gemini-2.5-pro'),
+            ),
+            'store' => new Maryam\Store(Maryam\Database::connect(ROOT . '/' . Maryam\Env::get('DB_PATH', 'data/maryam.db'))),
+            'brand' => require ROOT . '/config/brand.php',
+            'tones' => require ROOT . '/config/tones.php',
+        ];
+    }
+    return $app;
+}
