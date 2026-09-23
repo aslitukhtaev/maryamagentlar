@@ -14,7 +14,8 @@ use Maryam\Output;
 
 set_time_limit(600); // AI bir necha bosqichda ishlaydi — 1-3 daqiqa ketishi mumkin
 
-['ai' => $ai, 'store' => $store, 'brand' => $brand, 'tones' => $tones] = app();
+// Vertex AI ishlatiladi (Google Cloud $300 trial krediti bilan)
+['ai' => $ai, 'store' => $store, 'brand' => $brand, 'tones' => $tones] = appVertex();
 $e = fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES);
 $error = null;
 

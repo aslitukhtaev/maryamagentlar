@@ -15,7 +15,10 @@ use Maryam\Agents\Copywriter;
 use Maryam\Brief;
 use Maryam\Output;
 
-['ai' => $ai, 'store' => $store, 'brand' => $brand, 'tones' => $tones] = app();
+// Vertex AI ishlatiladi (Google Cloud $300 trial krediti bilan).
+// Agar Developer API kalitingiz (.env'dagi GEMINI_API_KEY) ishlaydigan bo'lsa,
+// buni app()'ga almashtirishingiz mumkin — lekin Vertex tasdiqlangan yo'l.
+['ai' => $ai, 'store' => $store, 'brand' => $brand, 'tones' => $tones] = appVertex();
 $command = $argv[1] ?? 'run';
 
 // --- Baholash: agent sizning didingizni shu orqali o'rganadi ---
