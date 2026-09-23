@@ -80,6 +80,12 @@ class Gemini
             $response = json_decode($body, true) ?? [];
             if ($status !== 200) {
                 $message = $response['error']['message'] ?? $body;
+                // Eng ko'p uchraydigan xatolarni o'zbekcha tushuntiramiz
+                if ($status === 402 || str_contains($message, 'credits are depleted')) {
+                    $message = "Gemini hisobidagi mablag' (kredit) tugagan. https://aistudio.google.com da billingni to'ldiring. ($message)";
+                } elseif (str_contains($message, 'no longer available')) {
+                    $message = ".env dagi model eskirgan, yangisini qo'ying (masalan gemini-3.8-flash). ($message)";
+                }
                 throw new RuntimeException("Gemini xatosi ($status): $message");
             }
             break;

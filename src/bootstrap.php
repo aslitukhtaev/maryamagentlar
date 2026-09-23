@@ -26,7 +26,7 @@ function app(): array
 {
     static $app = null;
     if ($app === null) {
-        $model = Maryam\Env::get('GEMINI_MODEL', 'gemini-2.5-flash');
+        $model = Maryam\Env::get('GEMINI_MODEL', 'gemini-3.8-flash');
         $app = [
             'ai'    => new Maryam\Gemini(
                 Maryam\Env::get('GEMINI_API_KEY', ''),
