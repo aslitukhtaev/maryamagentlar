@@ -60,16 +60,22 @@ function appVertex(): array
         // lekin Vertex'da yo'q bo'lishi mumkin. Shuning uchun Vertex uchun ALOHIDA,
         // Vertex'da uzoq vaqtdan beri barqaror turgan nomlar ishlatiladi, va agar
         // biri topilmasa (404), kod avtomatik keyingisiga o'tadi (generate() ichida).
+        // 2026-09-23: project-990aebdb-5252-4043-862 / us-central1 uchun
+        // gemini-2.5-flash ishlashi tasdiqlandi (real test orqali) — shuni
+        // birinchi qildik, shunda har safar muvaffaqiyatsiz urinishga
+        // vaqt ketmaydi. Qolganlari zaxira sifatida qoladi.
         $fallback = Maryam\Env::get('VERTEX_MODEL_FALLBACK', '');
         $fallbackModels = $fallback !== ''
             ? array_filter(array_map('trim', explode(',', $fallback)))
+            // gemini-2.5-flash bu yerda ham turadi: agar "smart" (gemini-2.5-pro)
+            // so'rov muvaffaqiyatsiz bo'lsa, tasdiqlangan modelga tez o'tish uchun
             : ['gemini-2.5-flash', 'gemini-2.0-flash-001', 'gemini-1.5-flash-002', 'gemini-1.5-flash-001'];
 
         $app = [
             'ai'    => new Maryam\GeminiVertex(
                 $projectId,
                 $location,
-                Maryam\Env::get('VERTEX_MODEL', 'gemini-2.0-flash-001'),
+                Maryam\Env::get('VERTEX_MODEL', 'gemini-2.5-flash'),
                 Maryam\Env::get('VERTEX_MODEL_SMART', 'gemini-2.5-pro'),
                 $fallbackModels,
             ),
