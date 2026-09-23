@@ -25,10 +25,15 @@ try {
     echo "  Tokens: {$result['tokens_in']} -> {$result['tokens_out']}\n";
     echo "  Vaqt: {$result['ms']}ms\n";
 } catch (Throwable $e) {
-    echo "✗ Xato: " . $e->getMessage() . "\n\n";
-    echo "QANDAY TUZATISH:\n";
-    echo "  1. Service account JSON key'ni loihaya qo'ying (service-account-key.json nomi bilan)\n";
-    echo "  2. Yoki: GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json php bin/test-vertex.php\n";
-    echo "  3. Yoki: gcloud auth application-default login qilip, keyin\n";
-    echo "          ~/.config/gcloud/application_default_credentials.json avtomatik ishlatiladi\n";
+    echo "✗ Xato: " . $e->getMessage() . "\n";
+
+    // Model topilmadi (404) — bu autentifikatsiya muammosi emas, tips ham boshqacha bo'lishi kerak.
+    // ISHGA_TUSHIR.bat shundan keyin avtomatik list-vertex-models.php'ni ishga tushiradi.
+    if (!str_contains($e->getMessage(), '404')) {
+        echo "\nQANDAY TUZATISH:\n";
+        echo "  1. gcloud auth application-default login qilinganmi?\n";
+        echo "  2. Yoki: GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json php bin/test-vertex.php\n";
+    }
+
+    exit(1); // .bat/.sh skriptlar xatoni sezishi uchun shart
 }
