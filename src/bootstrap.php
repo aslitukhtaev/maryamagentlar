@@ -32,6 +32,7 @@ function app(): array
                 Maryam\Env::get('GEMINI_API_KEY', ''),
                 $model,
                 Maryam\Env::get('GEMINI_MODEL_SMART') ?: $model,
+                array_filter(array_map('trim', explode(',', Maryam\Env::get('GEMINI_MODEL_FALLBACK', '')))),
             ),
             'store' => new Maryam\Store(Maryam\Database::connect(ROOT . '/' . Maryam\Env::get('DB_PATH', 'data/maryam.db'))),
             'brand' => require ROOT . '/config/brand.php',

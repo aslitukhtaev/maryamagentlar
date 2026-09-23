@@ -21,6 +21,8 @@ class Gemini
         private string $apiKey,
         public readonly string $fastModel,
         public readonly string $smartModel,
+        /** Asosiy model band bo'lsa navbat bilan sinaladigan zaxira modellar */
+        public readonly array $fallbackModels = [],
     ) {
     }
 
@@ -31,9 +33,24 @@ class Gemini
      */
     public function json(string $system, string $user, float $temperature = 0.8, bool $smart = false): array
     {
-        $result = $this->generate($system, $user, $temperature, $smart ? $this->smartModel : $this->fastModel);
-        $result['data'] = self::decodeJson($result['text']);
-        return $result;
+        $main = $smart ? $this->smartModel : $this->fastModel;
+        $models = array_values(array_unique([$main, ...$this->fallbackModels]));
+        $lastError = null;
+        foreach ($models as $i => $model) {
+            try {
+                $result = $this->generate($system, $user, $temperature, $model);
+                $result['data'] = self::decodeJson($result['text']);
+                $result['model_used'] = $model; // Qaysi model ishlandi — log uchun
+                return $result;
+            } catch (RuntimeException $e) {
+                $lastError = $e;
+                $isLast = $i === count($models) - 1;
+                if ($isLast || !preg_match('/\((429|503)\)/', $e->getMessage())) {
+                    throw $e;
+                }
+            }
+        }
+        throw $lastError ?? new RuntimeException('Hech bir model javob bermadi.');
     }
 
     /** Bitta so'rov. Vaqtinchalik xatolarda (429, 5xx) 3 martagacha qayta urinadi. */
