@@ -22,7 +22,7 @@ class GeminiVertex
         private string $location = 'us-central1', // yoki 'europe-west1' / 'us-west1'
         public readonly string $fastModel = 'gemini-2.5-flash',
         public readonly string $smartModel = 'gemini-2.5-pro',
-        public readonly array $fallbackModels = ['gemini-1.5-flash', 'gemini-1.5-pro-preview-0514'],
+        public readonly array $fallbackModels = ['gemini-2.5-flash', 'gemini-2.0-flash-001', 'gemini-1.5-flash-002', 'gemini-1.5-flash-001'],
     ) {
         if ($projectId === '') {
             throw new RuntimeException('GOOGLE_CLOUD_PROJECT_ID bo\'sh. .env ga qo\'shing.');
@@ -35,54 +35,6 @@ class GeminiVertex
         $result = $this->generate($system, $user, $temperature, $smart ? $this->smartModel : $this->fastModel);
         $result['data'] = self::decodeJson($result['text']);
         return $result;
-    }
-
-    /**
-     * Diagnostika: shu loyiha/region uchun Vertex AI'da haqiqatda MAVJUD bo'lgan
-     * Google modellarini so'rab ko'radi (model nomlarini taxmin qilib sinash o'rniga).
-     *
-     * @return array<int, array{name: string, generateContent: bool}>
-     */
-    public function listModels(): array
-    {
-        $url = sprintf(
-            'https://%s-aiplatform.googleapis.com/v1/publishers/google/models?pageSize=1000',
-            $this->location
-        );
-        $token = $this->getAccessToken();
-
-        $ch = curl_init($url);
-        Http::applyCaBundle($ch);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 60,
-            CURLOPT_HTTPHEADER => [
-                'Authorization: Bearer ' . $token,
-                'x-goog-user-project: ' . $this->projectId,
-            ],
-        ]);
-        $body = curl_exec($ch);
-        $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        curl_close($ch);
-
-        if ($body === false || $status !== 200) {
-            throw new RuntimeException("Modellar ro'yxatini olishda xato ($status): " . mb_substr((string) $body, 0, 500));
-        }
-
-        $data = json_decode($body, true) ?? [];
-        $models = [];
-        foreach ($data['publisherModels'] ?? [] as $m) {
-            $name = $m['name'] ?? '';
-            // Faqat "gemini" so'zi bor modellarni ko'rsatamiz (gemma, imagen, veo va h.k.ni yashiramiz)
-            if (str_contains($name, 'gemini')) {
-                $methods = $m['supportedActions']['generateContent'] ?? $m['supportedGenerationMethods'] ?? null;
-                $models[] = [
-                    'name' => $name,
-                    'generateContent' => $methods !== null,
-                ];
-            }
-        }
-        return $models;
     }
 
     protected function generate(string $system, string $user, float $temperature, string $model): array
@@ -99,7 +51,9 @@ class GeminiVertex
             } catch (RuntimeException $e) {
                 $lastError = $e;
                 $isLast = $i === count($models) - 1;
-                if ($isLast || !preg_match('/\((429|503|401|403)\)/', $e->getMessage())) {
+                // 404 ham qo'shildi: Vertex'da ba'zi model nomlari region/loyihaga qarab
+                // topilmasligi mumkin — bunday holda keyingi nomzod-modelga o'tamiz
+                if ($isLast || !preg_match('/\((429|503|401|403|404)\)/', $e->getMessage())) {
                     throw $e;
                 }
             }

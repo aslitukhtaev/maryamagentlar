@@ -20,16 +20,9 @@ if not exist .env (
 )
 echo.
 
-echo [3/3] Vertex AI tekshirilmoqda...
+echo [3/3] Vertex AI tekshirilmoqda (bir necha model nomzodi sinaladi)...
 echo.
 php bin\test-vertex.php
-if %ERRORLEVEL% NEQ 0 (
-    echo.
-    echo ------------------------------------------------
-    echo   Model bilan muammo bolsa - mavjud modellar:
-    echo ------------------------------------------------
-    php bin\list-vertex-models.php
-)
 
 echo.
 echo ============================================
