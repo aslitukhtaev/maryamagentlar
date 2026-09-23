@@ -83,6 +83,8 @@ class GeminiVertex
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
                 'Authorization: Bearer ' . $token,
+                // Shaxsiy hisob (gcloud login) orqali ishlaganda billing/quota shu loyihaga yozilsin
+                'x-goog-user-project: ' . $this->projectId,
             ],
             CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
         ]);
@@ -136,22 +138,44 @@ class GeminiVertex
         ];
     }
 
-    /** gcloud orqali access token oladi (ADC qo'llaniladi). */
+    /**
+     * Access token oladi. Windows'da ham, Linux/Mac'da ham ishlashi uchun
+     * avval ADC JSON faylini TO'G'RIDAN-TO'G'RI o'qiymiz (gcloud CLI'ni PATH'dan
+     * qidirib, uni ishga tushirishga suyanmaymiz — bu Windows'da ko'p muammo beradi).
+     * `gcloud` orqali chaqirish faqat oxirgi zaxira variant sifatida qoladi.
+     */
     private function getAccessToken(): string
     {
-        // GOOGLE_APPLICATION_CREDENTIALS o'rnatilgan bo'lsa uni ishlat
+        // 1) GOOGLE_APPLICATION_CREDENTIALS — service account key fayli
         $credFile = getenv('GOOGLE_APPLICATION_CREDENTIALS');
         if ($credFile && is_file($credFile)) {
             $cred = json_decode(file_get_contents($credFile), true);
-            if (isset($cred['type'], $cred['private_key'], $cred['client_email'])) {
+            if (is_array($cred) && isset($cred['private_key'], $cred['client_email'])) {
                 return $this->getTokenFromServiceAccount($cred);
             }
         }
 
-        // ADC (Application Default Credentials) — `gcloud auth application-default login` bilan o'rnatiladi
+        // 2) ADC fayli — `gcloud auth application-default login` shuni yaratadi.
+        //    Windows: %APPDATA%\gcloud\application_default_credentials.json
+        //    Linux/Mac: ~/.config/gcloud/application_default_credentials.json
+        $adcPath = ($credFile && is_file($credFile)) ? $credFile : self::defaultAdcPath();
+        if ($adcPath && is_file($adcPath)) {
+            $cred = json_decode((string) file_get_contents($adcPath), true);
+            if (is_array($cred)) {
+                if (($cred['type'] ?? '') === 'authorized_user' && isset($cred['refresh_token'])) {
+                    return $this->getTokenFromRefreshToken($cred);
+                }
+                if (isset($cred['private_key'], $cred['client_email'])) {
+                    return $this->getTokenFromServiceAccount($cred);
+                }
+            }
+        }
+
+        // 3) Oxirgi zaxira: gcloud CLI orqali (agar PATH'da bo'lsa)
         if (function_exists('exec')) {
+            $nullDevice = self::isWindows() ? 'NUL' : '/dev/null';
             $out = [];
-            @exec('gcloud auth application-default print-access-token 2>/dev/null', $out, $code);
+            @exec("gcloud auth application-default print-access-token 2>$nullDevice", $out, $code);
             if ($code === 0 && isset($out[0]) && trim($out[0]) !== '') {
                 return trim($out[0]);
             }
@@ -159,10 +183,59 @@ class GeminiVertex
 
         throw new RuntimeException(
             "Access token olib bo'lmadi. Tekshiring:\n"
-            . "  1. GOOGLE_APPLICATION_CREDENTIALS environment variable\n"
-            . "  2. gcloud auth application-default login\n"
-            . "  3. ~/.config/gcloud/application_default_credentials.json"
+            . "  1. `gcloud auth application-default login` qilinganmi?\n"
+            . "  2. Fayl mavjudmi: " . (self::defaultAdcPath() ?? "(HOME/APPDATA aniqlanmadi)") . "\n"
+            . "  3. Yoki GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json o'rnatilganmi?"
         );
+    }
+
+    private static function isWindows(): bool
+    {
+        return stripos(PHP_OS, 'WIN') === 0;
+    }
+
+    /** ADC faylining standart joylashuvi (OS'ga qarab). */
+    private static function defaultAdcPath(): ?string
+    {
+        if (self::isWindows()) {
+            $appData = getenv('APPDATA');
+            return $appData !== false ? $appData . '\\gcloud\\application_default_credentials.json' : null;
+        }
+        $home = getenv('HOME');
+        return $home !== false ? $home . '/.config/gcloud/application_default_credentials.json' : null;
+    }
+
+    /** ADC fayldagi refresh_token orqali yangi access_token so'raydi (gcloud CLI shart emas). */
+    private function getTokenFromRefreshToken(array $cred): string
+    {
+        $ch = curl_init('https://oauth2.googleapis.com/token');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_POSTFIELDS => http_build_query([
+                'client_id' => $cred['client_id'] ?? '',
+                'client_secret' => $cred['client_secret'] ?? '',
+                'refresh_token' => $cred['refresh_token'] ?? '',
+                'grant_type' => 'refresh_token',
+            ]),
+        ]);
+        $body = curl_exec($ch);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false) {
+            throw new RuntimeException("ADC token yangilashda tarmoq xatosi: $curlError");
+        }
+
+        $response = json_decode($body, true) ?? [];
+        if (!isset($response['access_token'])) {
+            $message = $response['error_description'] ?? $response['error'] ?? "noma'lum xato";
+            throw new RuntimeException(
+                "ADC token yangilab bo'lmadi ($message). Qayta urinib ko'ring: gcloud auth application-default login"
+            );
+        }
+        return $response['access_token'];
     }
 
     /** Service account key'dan JWT token oladi va Vertex AI'dan access token so'raydi. */
