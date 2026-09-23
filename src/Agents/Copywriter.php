@@ -34,7 +34,7 @@ final class Copywriter
     private const MAX_EDIT_ROUNDS = 2;
 
     public function __construct(
-        private Gemini $ai,
+        private object $ai,
         private Store $store,
         private array $brand,
         private array $tones,
@@ -124,7 +124,7 @@ final class Copywriter
 
         $result = $this->ai->json($system, $user, $temperature, $smart);
         $this->store->logRun($briefId, self::NAME, $step, $user, $result);
-        return $result['data'];
+        return $result['data'] ?? $result;
     }
 
     /** AI qaytargan variantni bir xil shaklga keltiradi (yetishmagan maydonlar bo'sh bo'ladi). */
