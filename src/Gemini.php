@@ -74,6 +74,7 @@ class Gemini
         while (true) {
             $attempt++;
             $ch = curl_init(sprintf(self::URL, rawurlencode($model)));
+            Http::applyCaBundle($ch);
             curl_setopt_array($ch, [
                 CURLOPT_POST => true,
                 CURLOPT_RETURNTRANSFER => true,

@@ -76,6 +76,7 @@ class GeminiVertex
         $token = $this->getAccessToken();
 
         $ch = curl_init($url);
+        Http::applyCaBundle($ch);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
@@ -209,6 +210,7 @@ class GeminiVertex
     private function getTokenFromRefreshToken(array $cred): string
     {
         $ch = curl_init('https://oauth2.googleapis.com/token');
+        Http::applyCaBundle($ch);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
@@ -257,6 +259,7 @@ class GeminiVertex
         $jwt = $message . '.' . base64_encode($signature);
 
         $ch = curl_init('https://oauth2.googleapis.com/token');
+        Http::applyCaBundle($ch);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
