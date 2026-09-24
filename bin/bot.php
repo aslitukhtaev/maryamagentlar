@@ -17,6 +17,7 @@ declare(strict_types=1);
 require __DIR__ . '/../src/bootstrap.php';
 
 use Maryam\Agents\Copywriter;
+use Maryam\Agents\GraphicDesigner;
 use Maryam\Agents\Manager;
 use Maryam\Brief;
 use Maryam\Env;
@@ -60,7 +61,7 @@ function tgCall(string $token, string $method, array $params = []): array
  * tugmalar bilan), va agar brif tayyor bo'lsa — Copywriter'ni fon jarayonida ishga tushirib,
  * natijani fayl qilib yuboradi.
  */
-function processTurn(string $token, Manager $manager, $store, string $chatId, string $text, array $tones): void
+function processTurn(string $token, Manager $manager, $store, $ai, array $brand, string $chatId, string $text, array $tones): void
 {
     tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'typing']);
 
@@ -95,6 +96,20 @@ function processTurn(string $token, Manager $manager, $store, string $chatId, st
 
         $tg = new Telegram($token, $chatId);
         $tg->sendDocument($path, "📋 Tayyor — brif #{$brief['id']}: {$brief['topic']}");
+
+        // Grafik dizayner: matn bilan bir vaqtda rasm ham tayyorlanadi
+        tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'upload_photo']);
+        $designer = new GraphicDesigner($ai, $store, $brand, $tones);
+        $design = $designer->run($brief, $cw['strategy'] ?? [], ['progress' => static fn () => null]);
+
+        if ($design['image_generated'] && $design['image_path']) {
+            $tg->sendPhoto($design['image_path'], "🎨 " . ($design['alt_text'] ?: 'Post uchun rasm'));
+        } elseif ($design['image_prompt'] !== '') {
+            // Rasm generatsiya ishlamadi — o'rniga tayyor prompt matnini beramiz (loyihaviy talab bo'yicha)
+            $promptPath = Output::dir($brief) . '/image-prompt.txt';
+            file_put_contents($promptPath, $design['image_prompt']);
+            $tg->sendDocument($promptPath, "🎨 Rasm generatsiya ishlamadi, lekin tayyor prompt matni (boshqa vositada ishlatish uchun):");
+        }
     }
 }
 
@@ -141,7 +156,7 @@ while (true) {
             try {
                 // Tugma bosilishi ham xuddi oddiy xabardek Manager'ga boradi —
                 // shunda suhbat tarixi va mantiq bitta joyda qoladi.
-                processTurn($token, $manager, $store, $chatId, $label, $tones);
+                processTurn($token, $manager, $store, $ai, $brand, $chatId, $label, $tones);
             } catch (Throwable $e) {
                 echo "❌ Xato: {$e->getMessage()}\n";
                 tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => "⚠ Xato yuz berdi: {$e->getMessage()}"]);
@@ -174,7 +189,7 @@ while (true) {
         }
 
         try {
-            processTurn($token, $manager, $store, $chatId, $text, $tones);
+            processTurn($token, $manager, $store, $ai, $brand, $chatId, $text, $tones);
         } catch (Throwable $e) {
             echo "❌ Xato: {$e->getMessage()}\n";
             tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => "⚠ Xato yuz berdi: {$e->getMessage()}"]);

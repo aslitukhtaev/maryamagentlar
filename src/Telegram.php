@@ -58,6 +58,19 @@ final class Telegram
         ], multipart: true);
     }
 
+    /** Rasmni (masalan designer.png) to'g'ridan-to'g'ri suratdek (preview bilan) yuboradi. */
+    public function sendPhoto(string $filePath, string $caption = ''): void
+    {
+        if (!is_file($filePath)) {
+            throw new RuntimeException("Fayl topilmadi: $filePath");
+        }
+        $this->call('sendPhoto', [
+            'chat_id' => $this->chatId,
+            'caption' => mb_substr($caption, 0, 1024),
+            'photo' => new \CURLFile($filePath),
+        ], multipart: true);
+    }
+
     /**
      * Manager "ask_field" qaytarsa (tourism_type/goal/language), shu maydon uchun
      * tugmalar (inline keyboard) quradi — foydalanuvchi variantni qo'lda yozmasdan bossa bo'ladi.

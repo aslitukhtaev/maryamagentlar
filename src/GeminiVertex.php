@@ -63,18 +63,96 @@ class GeminiVertex
 
     private function call(string $system, string $user, float $temperature, string $model): array
     {
-        $url = sprintf(self::URL, $this->location, $this->projectId, $this->location, $model);
-
-        $payload = [
+        $started = microtime(true);
+        $response = $this->postToModel($model, [
             'systemInstruction' => ['parts' => [['text' => $system]]],
             'contents' => [['role' => 'user', 'parts' => [['text' => $user]]]],
             'generationConfig' => [
                 'temperature' => $temperature,
                 'responseMimeType' => 'application/json',
             ],
-        ];
+        ]);
 
-        $started = microtime(true);
+        $candidate = $response['candidates'][0] ?? null;
+        if ($candidate === null) {
+            $reason = $response['promptFeedback']['blockReason'] ?? "noma'lum";
+            throw new RuntimeException("Vertex AI javob bermadi (sabab: $reason)");
+        }
+
+        $text = '';
+        foreach ($candidate['content']['parts'] ?? [] as $part) {
+            if (empty($part['thought'])) {
+                $text .= $part['text'] ?? '';
+            }
+        }
+
+        if (trim($text) === '') {
+            throw new RuntimeException("Vertex AI bo'sh javob qaytardi");
+        }
+
+        return [
+            'text' => $text,
+            'model' => $model,
+            'tokens_in' => (int) ($response['usageMetadata']['promptTokenCount'] ?? 0),
+            'tokens_out' => (int) ($response['usageMetadata']['candidatesTokenCount'] ?? 0),
+            'ms' => (int) ((microtime(true) - $started) * 1000),
+        ];
+    }
+
+    /**
+     * Rasm generatsiya qilishga urinadi — bir nechta nomzod modelni ketma-ket sinaydi
+     * (rasm generatsiyasi qiluvchi modellar Vertex'da tez-tez o'zgaradi/yangilanadi).
+     * Hech biri ishlamasa (masalan hisobda ruxsat yo'q) — RuntimeException tashlaydi,
+     * chaqiruvchi (GraphicDesigner) buni ushlab, faqat matn-prompt bilan qanoatlanadi.
+     *
+     * @return array{base64: string, mime_type: string, model_used: string}
+     */
+    public function generateImage(string $prompt, array $models = ['gemini-3-pro-image', 'gemini-2.5-flash-image', 'gemini-3.1-flash-image']): array
+    {
+        $lastError = null;
+        foreach ($models as $model) {
+            try {
+                return $this->requestImage($prompt, $model);
+            } catch (RuntimeException $e) {
+                $lastError = $e;
+                if (!preg_match('/\((404|429|503)\)/', $e->getMessage())) {
+                    throw $e;
+                }
+            }
+        }
+        throw $lastError ?? new RuntimeException('Rasm generatsiya qiluvchi model topilmadi.');
+    }
+
+    private function requestImage(string $prompt, string $model): array
+    {
+        $response = $this->postToModel($model, [
+            'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+            'generationConfig' => ['responseModalities' => ['TEXT', 'IMAGE']],
+        ]);
+
+        $candidate = $response['candidates'][0] ?? null;
+        if ($candidate === null) {
+            $reason = $response['promptFeedback']['blockReason'] ?? "noma'lum";
+            throw new RuntimeException("Vertex AI rasm qaytarmadi (sabab: $reason)");
+        }
+
+        foreach ($candidate['content']['parts'] ?? [] as $part) {
+            if (isset($part['inlineData']['data'])) {
+                return [
+                    'base64' => $part['inlineData']['data'],
+                    'mime_type' => $part['inlineData']['mimeType'] ?? 'image/png',
+                    'model_used' => $model,
+                ];
+            }
+        }
+
+        throw new RuntimeException("Model ($model) rasm emas, faqat matn qaytardi.");
+    }
+
+    /** Vertex AI'ga autentifikatsiyalangan so'rov yuboradi, javobni JSON massiv qilib qaytaradi. */
+    private function postToModel(string $model, array $payload): array
+    {
+        $url = sprintf(self::URL, $this->location, $this->projectId, $this->location, $model);
         $token = $this->getAccessToken();
 
         $ch = curl_init($url);
@@ -115,30 +193,7 @@ class GeminiVertex
             throw new RuntimeException("Vertex AI xatosi ($status): $message");
         }
 
-        $candidate = $response['candidates'][0] ?? null;
-        if ($candidate === null) {
-            $reason = $response['promptFeedback']['blockReason'] ?? "noma'lum";
-            throw new RuntimeException("Vertex AI javob bermadi (sabab: $reason)");
-        }
-
-        $text = '';
-        foreach ($candidate['content']['parts'] ?? [] as $part) {
-            if (empty($part['thought'])) {
-                $text .= $part['text'] ?? '';
-            }
-        }
-
-        if (trim($text) === '') {
-            throw new RuntimeException("Vertex AI bo'sh javob qaytardi");
-        }
-
-        return [
-            'text' => $text,
-            'model' => $model,
-            'tokens_in' => (int) ($response['usageMetadata']['promptTokenCount'] ?? 0),
-            'tokens_out' => (int) ($response['usageMetadata']['candidatesTokenCount'] ?? 0),
-            'ms' => (int) ((microtime(true) - $started) * 1000),
-        ];
+        return $response;
     }
 
     /**
