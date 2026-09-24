@@ -102,4 +102,62 @@ final class Store
             'variant' => array_diff_key(json_decode($r['data'], true), array_flip(['scores', 'issues', 'changes', 'score', 'warnings', 'db_id'])),
         ], $st->fetchAll());
     }
+
+    // ==================== BILIMLAR BAZASI (kompaniya faktlari) ====================
+
+    /** Yangi fakt qo'shadi (Telegram orqali "o'rgatilganda"). */
+    public function addKnowledge(string $content, string $category = 'umumiy'): void
+    {
+        $this->db->prepare('INSERT INTO knowledge (category, content) VALUES (?, ?)')
+            ->execute([$category, $content]);
+    }
+
+    /** Barcha faktlarni oddiy matn ro'yxati sifatida qaytaradi — agentlar shu bilan ishlaydi. */
+    public function knowledgeFacts(int $limit = 200): array
+    {
+        $st = $this->db->prepare('SELECT content FROM knowledge ORDER BY id DESC LIMIT ?');
+        $st->bindValue(1, $limit, PDO::PARAM_INT);
+        $st->execute();
+        return array_column($st->fetchAll(), 'content');
+    }
+
+    // ==================== SUHBAT HOLATI (Telegram orchestrator uchun) ====================
+
+    public function addChatMessage(string $chatId, string $role, string $content): void
+    {
+        $this->db->prepare('INSERT INTO chat_messages (chat_id, role, content) VALUES (?, ?, ?)')
+            ->execute([$chatId, $role, $content]);
+    }
+
+    /** Oxirgi N ta xabar, eskisidan yangisiga qarab tartiblangan. */
+    public function recentChatMessages(string $chatId, int $limit = 12): array
+    {
+        $st = $this->db->prepare('SELECT role, content FROM chat_messages WHERE chat_id = ? ORDER BY id DESC LIMIT ?');
+        $st->bindValue(1, $chatId);
+        $st->bindValue(2, $limit, PDO::PARAM_INT);
+        $st->execute();
+        return array_reverse($st->fetchAll());
+    }
+
+    /** Hali tugallanmagan brifning to'plangan qismi (masalan faqat mavzu ma'lum). */
+    public function conversationBrief(string $chatId): array
+    {
+        $st = $this->db->prepare('SELECT brief_json FROM conversation_state WHERE chat_id = ?');
+        $st->execute([$chatId]);
+        $row = $st->fetch();
+        return $row ? (json_decode($row['brief_json'], true) ?: []) : [];
+    }
+
+    public function saveConversationBrief(string $chatId, array $brief): void
+    {
+        $this->db->prepare(
+            'INSERT INTO conversation_state (chat_id, brief_json, updated_at) VALUES (?, ?, datetime("now", "localtime"))
+             ON CONFLICT(chat_id) DO UPDATE SET brief_json = excluded.brief_json, updated_at = excluded.updated_at'
+        )->execute([$chatId, json_encode($brief, JSON_UNESCAPED_UNICODE)]);
+    }
+
+    public function clearConversationBrief(string $chatId): void
+    {
+        $this->db->prepare('DELETE FROM conversation_state WHERE chat_id = ?')->execute([$chatId]);
+    }
 }

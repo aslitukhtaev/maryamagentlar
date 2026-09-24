@@ -53,10 +53,18 @@ final class Copywriter
         $tone = $options['tone'] ?? $this->tones[$brief['tourism_type']];
         $briefId = $brief['id'] ?? $this->store->saveBrief($brief);
 
+        // Telegram orqali "o'rgatilgan" kompaniya faktlarini brend faktlariga qo'shamiz —
+        // shunda config/brand.php'ni qo'lda tahrirlamasdan ham agent yangi faktlarni biladi
+        $brandWithKnowledge = $this->brand;
+        $brandWithKnowledge['facts'] = array_values(array_unique(array_merge(
+            $this->brand['facts'] ?? [],
+            $this->store->knowledgeFacts()
+        )));
+
         // Barcha bosqichlarga beriladigan umumiy kontekst
         $context = [
             'brief' => Brief::forPrompt($brief, $this->tones),
-            'brand' => $this->brand,
+            'brand' => $brandWithKnowledge,
             'tone_profile' => $tone,
         ];
 

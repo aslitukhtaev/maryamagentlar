@@ -81,6 +81,34 @@ final class Database
                 created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
             );
             CREATE INDEX IF NOT EXISTS idx_variants_rating ON copy_variants(rating);
+
+            -- Kompaniya haqidagi faktlar — Telegram orqali "o'rgatiladi",
+            -- barcha agentlar (Copywriter va h.k.) bularni brend faktlariga qo'shib ishlatadi.
+            CREATE TABLE IF NOT EXISTS knowledge (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                category      TEXT NOT NULL DEFAULT 'umumiy',
+                content       TEXT NOT NULL,
+                created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+
+            -- Har bir Telegram chat uchun suhbat tarixi — orchestrator (Manager)
+            -- shu tarixga qarab kontekstni tushunadi.
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id       TEXT NOT NULL,
+                role          TEXT NOT NULL,          -- user | bot
+                content       TEXT NOT NULL,
+                created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_chat ON chat_messages(chat_id, id);
+
+            -- Har bir chat uchun hali TO'LIQ bo'lmagan brif (masalan, mavzu bor,
+            -- lekin turizm turi hali aytilmagan) — keyingi xabarda davom etadi.
+            CREATE TABLE IF NOT EXISTS conversation_state (
+                chat_id       TEXT PRIMARY KEY,
+                brief_json    TEXT NOT NULL DEFAULT '{}',
+                updated_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
         SQL);
     }
 }
