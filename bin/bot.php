@@ -97,11 +97,25 @@ while (true) {
         tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'typing']);
 
         try {
-            $result = $manager->handle($chatId, $text);
-            tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => $result['reply']]);
+            // 1-bosqich: TEZKOR qaror — bir necha soniyada javob keladi
+            $decision = $manager->decide($chatId, $text);
+            tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => $decision['reply']]);
+            echo "   qaror: {$decision['action']}\n";
 
-            if ($result['ran_copywriter'] && $result['copywriter_result']) {
-                $cw = $result['copywriter_result'];
+            // 2-bosqich: agar brif to'liq bo'lsa — Copywriter fon jarayonida ishlaydi
+            // (bu bir necha daqiqa davom etishi mumkin, shuning uchun alohida)
+            if ($decision['action'] === 'run_copywriter' && $decision['brief']) {
+                $lastPing = 0;
+                $cw = $manager->runCopywriter($decision['brief'], [
+                    // Har bosqichda Telegram'ga "typing..." signalini yangilab turamiz,
+                    // aks holda Telegram 5 soniyadan keyin uni o'chirib qo'yadi
+                    'progress' => function () use ($token, $chatId, &$lastPing) {
+                        if (time() - $lastPing >= 4) {
+                            tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'upload_document']);
+                            $lastPing = time();
+                        }
+                    },
+                ]);
                 $brief = $store->brief($cw['brief_id']);
                 $path = Output::save($brief, 'copywriter.txt', Copywriter::toText($cw));
                 Output::save($brief, 'copywriter.json', json_encode($cw, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));

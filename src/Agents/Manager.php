@@ -34,9 +34,14 @@ final class Manager
     }
 
     /**
-     * @return array{reply: string, ran_copywriter: bool, copywriter_result: ?array}
+     * TEZKOR bosqich — faqat qaror qabul qiladi va DARHOL javob qaytaradi.
+     * Copywriter'ni ISHGA TUSHIRMAYDI (u bir necha daqiqa davom etishi mumkin —
+     * shuning uchun foydalanuvchi "jim qolib ketdi" deb o'ylamasin, avval tezkor
+     * javob boradi, keyin bot alohida runCopywriter()ni chaqiradi).
+     *
+     * @return array{action: string, reply: string, brief: ?array}
      */
-    public function handle(string $chatId, string $userText): array
+    public function decide(string $chatId, string $userText): array
     {
         $this->store->addChatMessage($chatId, 'user', $userText);
 
@@ -65,9 +70,6 @@ final class Manager
         );
         $mergedBrief = array_merge($partialBrief, $newBrief);
 
-        $ranCopywriter = false;
-        $copywriterResult = null;
-
         if ($action === 'save_knowledge' && !empty(trim((string) ($data['knowledge']['content'] ?? '')))) {
             $this->store->addKnowledge(
                 trim((string) $data['knowledge']['content']),
@@ -75,16 +77,14 @@ final class Manager
             );
         }
 
+        $briefReady = null;
         if ($action === 'run_copywriter') {
             try {
-                $brief = Brief::normalize($mergedBrief, $this->tones);
-                $brief['id'] = $this->store->saveBrief($brief);
-                $agent = new Copywriter($this->ai, $this->store, $this->brand, $this->tones);
-                $copywriterResult = $agent->run($brief);
-                $ranCopywriter = true;
+                $briefReady = Brief::normalize($mergedBrief, $this->tones);
                 $this->store->clearConversationBrief($chatId); // yangi so'rov uchun toza boshlanadi
             } catch (InvalidArgumentException $e) {
                 // Brif hali to'liq emas ekan — foydalanuvchidan so'rab, holatni saqlaymiz
+                $action = 'chat';
                 $reply = "Buni tayyorlash uchun yana bir narsa kerak: " . $e->getMessage();
                 $this->store->saveConversationBrief($chatId, $mergedBrief);
             }
@@ -94,10 +94,14 @@ final class Manager
 
         $this->store->addChatMessage($chatId, 'bot', $reply);
 
-        return [
-            'reply' => $reply,
-            'ran_copywriter' => $ranCopywriter,
-            'copywriter_result' => $copywriterResult,
-        ];
+        return ['action' => $action, 'reply' => $reply, 'brief' => $briefReady];
+    }
+
+    /** SEKIN bosqich — decide()'dan "run_copywriter" chiqsa, shu alohida chaqiriladi. */
+    public function runCopywriter(array $brief, array $options = []): array
+    {
+        $brief['id'] = $this->store->saveBrief($brief);
+        $agent = new Copywriter($this->ai, $this->store, $this->brand, $this->tones);
+        return $agent->run($brief, $options);
     }
 }
