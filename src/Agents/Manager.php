@@ -39,7 +39,7 @@ final class Manager
      * shuning uchun foydalanuvchi "jim qolib ketdi" deb o'ylamasin, avval tezkor
      * javob boradi, keyin bot alohida runCopywriter()ni chaqiradi).
      *
-     * @return array{action: string, reply: string, brief: ?array}
+     * @return array{action: string, reply: string, ask_field: string, brief: ?array}
      */
     public function decide(string $chatId, string $userText): array
     {
@@ -52,6 +52,7 @@ final class Manager
             'company_facts_count' => count($this->store->knowledgeFacts()),
             'tourism_types' => array_keys($this->tones),
             'goals' => array_keys(Brief::GOALS),
+            'languages' => array_keys(Brief::LANGUAGES),
         ];
 
         $system = file_get_contents(ROOT . '/prompts/manager/orchestrate.md');
@@ -64,6 +65,8 @@ final class Manager
 
         $action = (string) ($data['action'] ?? 'chat');
         $reply = trim((string) ($data['reply'] ?? "Kechirasiz, tushunmadim, boshqacha ayting."));
+        $askField = in_array($data['ask_field'] ?? '', ['tourism_type', 'goal', 'language'], true)
+            ? $data['ask_field'] : '';
         $newBrief = array_filter(
             (array) ($data['brief'] ?? []),
             static fn ($v) => is_string($v) && trim($v) !== ''
@@ -94,7 +97,7 @@ final class Manager
 
         $this->store->addChatMessage($chatId, 'bot', $reply);
 
-        return ['action' => $action, 'reply' => $reply, 'brief' => $briefReady];
+        return ['action' => $action, 'reply' => $reply, 'ask_field' => $askField, 'brief' => $briefReady];
     }
 
     /** SEKIN bosqich — decide()'dan "run_copywriter" chiqsa, shu alohida chaqiriladi. */

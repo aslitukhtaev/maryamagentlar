@@ -1,14 +1,15 @@
 <?php
 /**
- * Telegram bot — orchestrator (Manager) orqali TABIIY SUHBAT.
+ * Telegram bot — orchestrator (Manager) orqali TABIIY SUHBAT + tugmalar.
  *
  * Ishga tushirish:  php bin/bot.php
  * Doimiy ishlab turishi kerak — terminalni yopmang (yoki fon rejimida ishga tushiring).
  * To'xtatish: Ctrl+C
  *
- * Ishlash tartibi: Telegram'dan yangi xabar keladi -> Manager (AI) uni tahlil qiladi ->
- * yoki oddiy javob beradi, yoki kompaniya faktini saqlaydi, yoki Copywriter'ni chaqirib
- * tayyor matnlarni fayl qilib yuboradi.
+ * Ishlash tartibi: Telegram'dan yangi xabar (yoki tugma bosilishi) keladi -> Manager (AI)
+ * uni tahlil qiladi -> yoki oddiy javob beradi (kerak bo'lsa tugmalar bilan), yoki
+ * kompaniya faktini saqlaydi, yoki Copywriter'ni chaqirib tayyor matnlarni fayl qilib
+ * yuboradi.
  */
 
 declare(strict_types=1);
@@ -17,6 +18,7 @@ require __DIR__ . '/../src/bootstrap.php';
 
 use Maryam\Agents\Copywriter;
 use Maryam\Agents\Manager;
+use Maryam\Brief;
 use Maryam\Env;
 use Maryam\Http;
 use Maryam\Output;
@@ -52,7 +54,51 @@ function tgCall(string $token, string $method, array $params = []): array
     return json_decode((string) $body, true) ?? [];
 }
 
-echo "🤖 Bot ishga tushdi (@ orqali Telegram'da yozing). To'xtatish: Ctrl+C\n";
+/**
+ * Bitta "foydalanuvchi xabari" (matn yoki tugma bosilishi natijasida hosil bo'lgan matn)ni
+ * to'liq qayta ishlaydi: Manager'dan tezkor qaror oladi, javob yuboradi (kerak bo'lsa
+ * tugmalar bilan), va agar brif tayyor bo'lsa — Copywriter'ni fon jarayonida ishga tushirib,
+ * natijani fayl qilib yuboradi.
+ */
+function processTurn(string $token, Manager $manager, $store, string $chatId, string $text, array $tones): void
+{
+    tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'typing']);
+
+    $decision = $manager->decide($chatId, $text);
+    $params = ['chat_id' => $chatId, 'text' => $decision['reply']];
+    if ($decision['ask_field'] !== '') {
+        $keyboard = Telegram::fieldKeyboard($decision['ask_field'], $tones);
+        if ($keyboard !== null) {
+            $params['reply_markup'] = $keyboard;
+        }
+    }
+    tgCall($token, 'sendMessage', $params);
+    echo "   qaror: {$decision['action']}" . ($decision['ask_field'] ? " (so'ralmoqda: {$decision['ask_field']})" : '') . "\n";
+
+    // Agar brif to'liq bo'lsa — Copywriter fon jarayonida ishlaydi (bir necha daqiqa
+    // davom etishi mumkin, shuning uchun tezkor javobdan KEYIN, alohida ishga tushadi).
+    if ($decision['action'] === 'run_copywriter' && $decision['brief']) {
+        $lastPing = 0;
+        $cw = $manager->runCopywriter($decision['brief'], [
+            // Har bosqichda Telegram'ga "yozyapti..." signalini yangilab turamiz,
+            // aks holda Telegram 5 soniyadan keyin uni o'chirib qo'yadi
+            'progress' => function () use ($token, $chatId, &$lastPing) {
+                if (time() - $lastPing >= 4) {
+                    tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'upload_document']);
+                    $lastPing = time();
+                }
+            },
+        ]);
+        $brief = $store->brief($cw['brief_id']);
+        $path = Output::save($brief, 'copywriter.txt', Copywriter::toText($cw));
+        Output::save($brief, 'copywriter.json', json_encode($cw, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+        $tg = new Telegram($token, $chatId);
+        $tg->sendDocument($path, "📋 Tayyor — brif #{$brief['id']}: {$brief['topic']}");
+    }
+}
+
+echo "🤖 Bot ishga tushdi (Telegram'da yozing yoki tugmalarni bosing). To'xtatish: Ctrl+C\n";
 if ($allowed) {
     echo "   Ruxsat berilgan chat(lar): " . implode(', ', $allowed) . "\n";
 } else {
@@ -71,6 +117,39 @@ while (true) {
 
     foreach ($updates['result'] ?? [] as $update) {
         $offset = $update['update_id'] + 1;
+
+        // --- Tugma bosilishi (callback_query) ---
+        $callback = $update['callback_query'] ?? null;
+        if ($callback !== null) {
+            $chatId = (string) ($callback['message']['chat']['id'] ?? '');
+            // Telegram'ga "bosildi" deb darhol javob beramiz (aks holda tugmada "soat" aylanib turadi)
+            tgCall($token, 'answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+
+            if ($allowed && !in_array($chatId, $allowed, true)) {
+                continue;
+            }
+
+            [$field, $value] = array_pad(explode(':', (string) ($callback['data'] ?? ''), 2), 2, '');
+            $label = match ($field) {
+                'tourism_type' => $tones[$value]['label'] ?? $value,
+                'goal' => Brief::GOALS[$value] ?? $value,
+                'language' => Brief::LANGUAGES[$value] ?? $value,
+                default => $value,
+            };
+            echo "→ [$chatId] (tugma) $label\n";
+
+            try {
+                // Tugma bosilishi ham xuddi oddiy xabardek Manager'ga boradi —
+                // shunda suhbat tarixi va mantiq bitta joyda qoladi.
+                processTurn($token, $manager, $store, $chatId, $label, $tones);
+            } catch (Throwable $e) {
+                echo "❌ Xato: {$e->getMessage()}\n";
+                tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => "⚠ Xato yuz berdi: {$e->getMessage()}"]);
+            }
+            continue;
+        }
+
+        // --- Oddiy matnli xabar ---
         $message = $update['message'] ?? null;
         if ($message === null || !isset($message['text'])) {
             continue; // rasm, ovoz va h.k. hozircha e'tiborsiz qoldiriladi
@@ -94,35 +173,8 @@ while (true) {
             continue;
         }
 
-        tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'typing']);
-
         try {
-            // 1-bosqich: TEZKOR qaror — bir necha soniyada javob keladi
-            $decision = $manager->decide($chatId, $text);
-            tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => $decision['reply']]);
-            echo "   qaror: {$decision['action']}\n";
-
-            // 2-bosqich: agar brif to'liq bo'lsa — Copywriter fon jarayonida ishlaydi
-            // (bu bir necha daqiqa davom etishi mumkin, shuning uchun alohida)
-            if ($decision['action'] === 'run_copywriter' && $decision['brief']) {
-                $lastPing = 0;
-                $cw = $manager->runCopywriter($decision['brief'], [
-                    // Har bosqichda Telegram'ga "typing..." signalini yangilab turamiz,
-                    // aks holda Telegram 5 soniyadan keyin uni o'chirib qo'yadi
-                    'progress' => function () use ($token, $chatId, &$lastPing) {
-                        if (time() - $lastPing >= 4) {
-                            tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'upload_document']);
-                            $lastPing = time();
-                        }
-                    },
-                ]);
-                $brief = $store->brief($cw['brief_id']);
-                $path = Output::save($brief, 'copywriter.txt', Copywriter::toText($cw));
-                Output::save($brief, 'copywriter.json', json_encode($cw, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-
-                $tg = new Telegram($token, $chatId);
-                $tg->sendDocument($path, "📋 Tayyor — brif #{$brief['id']}: {$brief['topic']}");
-            }
+            processTurn($token, $manager, $store, $chatId, $text, $tones);
         } catch (Throwable $e) {
             echo "❌ Xato: {$e->getMessage()}\n";
             tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => "⚠ Xato yuz berdi: {$e->getMessage()}"]);

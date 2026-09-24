@@ -58,6 +58,41 @@ final class Telegram
         ], multipart: true);
     }
 
+    /**
+     * Manager "ask_field" qaytarsa (tourism_type/goal/language), shu maydon uchun
+     * tugmalar (inline keyboard) quradi — foydalanuvchi variantni qo'lda yozmasdan bossa bo'ladi.
+     * Noma'lum maydon uchun null qaytaradi (tugmasiz oddiy xabar yuboriladi).
+     */
+    /** Tugma matni uzun bo'lmasin uchun "goal"ning qisqa nomlari (Brief::GOALS to'liq tavsif beradi). */
+    private const GOAL_SHORT_LABELS = [
+        'lid' => "Lid yig'ish",
+        'sotuv' => 'Sotuv/bron',
+        'brend' => 'Brend tanitish',
+        'jalb' => 'Jalb qilish',
+    ];
+
+    public static function fieldKeyboard(string $field, array $tones): ?string
+    {
+        $rows = match ($field) {
+            'tourism_type' => array_map(
+                static fn ($key, $t) => [['text' => $t['label'], 'callback_data' => "tourism_type:$key"]],
+                array_keys($tones),
+                $tones
+            ),
+            'goal' => array_map(
+                static fn ($key) => [['text' => self::GOAL_SHORT_LABELS[$key] ?? $key, 'callback_data' => "goal:$key"]],
+                array_keys(Brief::GOALS)
+            ),
+            'language' => array_map(
+                static fn ($key, $label) => [['text' => $label, 'callback_data' => "language:$key"]],
+                array_keys(Brief::LANGUAGES),
+                Brief::LANGUAGES
+            ),
+            default => null,
+        };
+        return $rows ? json_encode(['inline_keyboard' => $rows], JSON_UNESCAPED_UNICODE) : null;
+    }
+
     /** 4096 belgidan uzun matnni bir necha xabarga bo'ladi (so'z chegarasidan sindiradi). */
     private static function splitLong(string $text, int $limit = 4000): array
     {
