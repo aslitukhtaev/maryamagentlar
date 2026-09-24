@@ -82,6 +82,17 @@ try {
     printf("Tayyor! (%.0f soniya) Saqlandi: %s\n", microtime(true) - $started, $path);
     echo "Variantlarni baholang — agent keyingi safar sizning didingizga moslashadi:\n";
     echo "  php bin/copywriter.php rate <ID> <1-5> \"izoh\"\n";
+
+    // Telegram sozlangan bo'lsa (.env'da TELEGRAM_BOT_TOKEN/CHAT_ID) — natijani darhol yuboramiz
+    if (Maryam\Telegram::isConfigured()) {
+        try {
+            $tg = Maryam\Telegram::fromEnv();
+            $tg->sendDocument($path, "📋 Copywriter natijasi — brif #{$brief['id']}: {$brief['topic']}");
+            echo "📨 Telegram'ga yuborildi.\n";
+        } catch (Throwable $tgError) {
+            echo "⚠ Telegram'ga yuborilmadi: {$tgError->getMessage()}\n";
+        }
+    }
 } catch (Throwable $e) {
     fwrite(STDERR, "\nXato: {$e->getMessage()}\n");
     exit(1);
