@@ -11,17 +11,19 @@ return [
     'name' => 'Maryam Travel',
 
     // Aloqa — CTA (harakatga chaqiruv)da ishlatiladi
-    'phone'     => '',   // masalan: +998 90 123 45 67
-    'telegram'  => '',   // masalan: @maryamtravel
-    'instagram' => '',   // masalan: @maryam.travel
-    'address'   => '',   // masalan: Toshkent, Chilonzor tumani, ...
+    'phone'     => '+998 55 303-22-22 (call-markaz)',
+    'telegram'  => 't.me/maryam_travell_agency (qaynoq narxlar shu yerda)',
+    'instagram' => '@maryamtravel.uz',
+    'address'   => 'Ofislar: Toshkent, Navoiy, G\'ijduvon, Buxoro',
 
     // Ishonch uyg'otadigan faktlar (faqat haqiqiylarini yozing!)
-    'founded_year' => '', // masalan: 2015
+    'founded_year' => '', // masalan: 2019 (Instagram bio: "Turizmda 7 yil")
     'license'      => '', // masalan: Turizm qo'mitasi litsenziyasi № ...
     'facts' => [
-        // 'Har yili 2000+ ziyoratchini Umraga olib boramiz',
-        // 'Makka va Madinada Haramga 300 m masofadagi mehmonxonalar',
+        'Turizmda 7 yil',
+        '23 000 mamnun mijoz',
+        "4 ta ofis: Toshkent, Navoiy, G'ijduvon, Buxoro",
+        "Asosiy xizmatlar: qaynoq turlar, arzon aviabiletlar, viza xizmatlari",
     ],
 
     // Raqobatchilardan farqimiz (USP)

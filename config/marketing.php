@@ -22,9 +22,9 @@ return [
 
     // Yo'nalishlar ulushi (taxminan). Kompaniyangiz asosiy daromadiga moslang.
     'mix' => [
-        'umra'     => 50,
-        'outbound' => 25,
-        'ichki'    => 20,
+        'outbound' => 75,
+        'umra'     => 10,
+        'ichki'    => 10,
         'inbound'  => 5,
     ],
 
