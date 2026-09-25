@@ -7,6 +7,7 @@ namespace Maryam\Agents;
 use DateTimeImmutable;
 use Maryam\Brief;
 use Maryam\Marketing;
+use Maryam\Prompts;
 use Maryam\Store;
 use Throwable;
 
@@ -58,7 +59,7 @@ final class ContentPlanner
                     'details' => $item['idea'],
                 ], $this->tones);
                 $result = (new Copywriter($this->ai, $this->store, $this->brand, $this->tones))
-                    ->run($brief, ['format' => $item['format'], 'progress' => $say]);
+                    ->run($brief, ['format' => $item['format'], 'template_id' => $item['template_id'] ?: null, 'progress' => $say]);
                 $item['brief_id'] = $result['brief_id'];
                 $item['content'] = $result['variants'][0] ?? null;
                 $item['placeholders'] = $result['placeholders'];
@@ -92,14 +93,13 @@ final class ContentPlanner
             'brand' => Marketing::brand($this->brand, $this->store),
             'recent_topics' => $this->store->recentPlanTopics(),
             'wishes' => $wishes,
-        ];
+            'templates' => array_map(static fn (array $t) => [
+                'id' => (int) $t['id'], 'name' => $t['name'], 'format' => $t['format'],
+                'tourism_type' => $t['tourism_type'] ?: 'hammasi', 'stage' => $t['stage'],
+            ], $this->store->activeTemplates()),
+        ] + Marketing::training($this->store, self::NAME);
 
-        $system = file_get_contents(ROOT . '/prompts/planner/plan.md');
-        $user = "Kontekst (JSON):\n" . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
-              . "\n\nVazifani bajar va faqat ko'rsatilgan formatdagi JSON qaytar.";
-        $result = $this->ai->json($system, $user, 0.7, true);
-        $this->store->logRun(null, self::NAME, 'plan', $user, $result);
-        $data = $result['data'] ?? [];
+        $data = Prompts::ask($this->ai, $this->store, 'planner/plan', $context, 0.7, true, null, self::NAME, 'plan');
 
         $items = [];
         foreach ((array) ($data['items'] ?? []) as $raw) {
@@ -126,6 +126,10 @@ final class ContentPlanner
         }
         $format = (string) ($raw['format'] ?? '');
         $goal = (string) ($raw['goal'] ?? '');
+        $template = !empty($raw['template_id']) ? $this->store->row('templates', (int) $raw['template_id']) : null;
+        if ($template && $template['active']) {
+            $format = $template['format']; // shablon formatni belgilaydi
+        }
         return [
             'day' => (string) ($raw['day'] ?? ''),
             'format' => isset($settings['formats'][$format]) ? $format : 'post',
@@ -135,6 +139,8 @@ final class ContentPlanner
             'idea' => trim((string) ($raw['idea'] ?? '')),
             'product_id' => (string) ($raw['product_id'] ?? ''),
             'why' => (string) ($raw['why'] ?? ''),
+            'template_id' => $template && $template['active'] ? (int) $template['id'] : 0,
+            'template_name' => $template && $template['active'] ? $template['name'] : '',
         ];
     }
 
@@ -148,6 +154,9 @@ final class ContentPlanner
         foreach ($plan['items'] as $i => $item) {
             $status = isset($item['error']) ? ' ⚠ tayyorlanmadi' : '';
             $out .= "\n" . ($i + 1) . ". {$item['day']} · " . mb_strtoupper($item['format']) . " · {$item['topic']}$status\n";
+            if (($item['template_name'] ?? '') !== '') {
+                $out .= "   shablon: {$item['template_name']}\n";
+            }
             if ($item['why'] !== '') {
                 $out .= "   ↳ {$item['why']}\n";
             }

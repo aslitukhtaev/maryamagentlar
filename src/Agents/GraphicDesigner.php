@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Maryam\Agents;
 
 use Maryam\Brief;
+use Maryam\Marketing;
 use Maryam\Output;
+use Maryam\Prompts;
 use Maryam\Store;
 use Throwable;
 
@@ -35,8 +37,10 @@ final class GraphicDesigner
     /**
      * @param array $brief           Brief::normalize() natijasi ('id' bilan)
      * @param array $strategyContext ixtiyoriy: Copywriter strategiyasidan big_idea/key_message
-     * @param array $options         'progress' => fn(string $xabar)
-     * @return array{brief_id: int, image_prompt: string, alt_text: string, image_path: ?string, image_generated: bool}
+     * @param array $options         'progress' => fn(string $xabar),
+     *                               'template_id' => shablon (dizayn ko'rsatmasi shundan olinadi),
+     *                               'variant' => Copywriter varianti (sarlavha/narx/CTA maketga tushadi)
+     * @return array{brief_id: int, image_prompt: string, alt_text: string, layout: array, image_path: ?string, image_generated: bool}
      */
     public function run(array $brief, array $strategyContext = [], array $options = []): array
     {
@@ -46,20 +50,22 @@ final class GraphicDesigner
 
         $context = [
             'brief' => Brief::forPrompt($brief, $this->tones),
-            'brand' => $this->brand,
+            'brand' => Marketing::brand($this->brand, $this->store),
             'tone_profile' => $tone,
             'big_idea' => $strategyContext['big_idea'] ?? '',
             'key_message' => $strategyContext['key_message'] ?? '',
-        ];
+        ] + Marketing::training($this->store, self::NAME, isset($options['template_id']) ? (int) $options['template_id'] : null);
+        if (!empty($options['variant'])) {
+            $v = $options['variant'];
+            $context['copy'] = array_filter([
+                'hook' => $v['hook'] ?? '', 'cta' => $v['cta'] ?? '', 'headline' => $v['headline'] ?? '',
+                'visual_idea' => $v['visual'] ?? '', 'format' => $v['format'] ?? '',
+            ]);
+        }
 
-        $say('1/2 Kontseptsiya: rasm uchun batafsil prompt yozilmoqda...');
-        $system = file_get_contents(ROOT . '/prompts/designer/prompt.md');
-        $user = "Kontekst (JSON):\n" . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
-              . "\n\nVazifani bajar va faqat ko'rsatilgan formatdagi JSON qaytar.";
-
-        $result = $this->ai->json($system, $user, 0.8, true);
-        $this->store->logRun($briefId, self::NAME, 'prompt', $user, $result);
-        $data = $result['data'] ?? [];
+        $say('1/2 Kontseptsiya: maket va rasm prompti tayyorlanmoqda...');
+        $data = Prompts::ask($this->ai, $this->store, 'designer/prompt', $context, 0.8, true, $briefId, self::NAME, 'prompt');
+        $layout = array_values(array_map('strval', (array) ($data['layout'] ?? [])));
 
         $imagePrompt = trim((string) ($data['image_prompt'] ?? ''));
         $altText = trim((string) ($data['alt_text'] ?? ''));
@@ -86,6 +92,7 @@ final class GraphicDesigner
             'brief_id' => $briefId,
             'image_prompt' => $imagePrompt,
             'alt_text' => $altText,
+            'layout' => $layout,
             'image_path' => $imagePath,
             'image_generated' => $generated,
         ];

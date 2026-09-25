@@ -126,6 +126,99 @@ final class Database
                 data          TEXT NOT NULL,              -- reja + har band uchun tayyor matn (JSON)
                 created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
             );
+
+            -- ===== O'QITISH MARKAZI =====
+
+            -- Post shablonlari: tuzilma (slotlar bilan), namuna, yozish qoidalari, dizayn ko'rsatmasi
+            CREATE TABLE IF NOT EXISTS templates (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                name          TEXT NOT NULL,
+                format        TEXT NOT NULL DEFAULT 'post',   -- post | reels | karusel | reklama
+                tourism_type  TEXT NOT NULL DEFAULT '',       -- '' = barcha yo'nalishlar
+                stage         TEXT NOT NULL DEFAULT 'sotuv',  -- qamrov | ishonch | sotuv
+                structure     TEXT NOT NULL DEFAULT '',
+                example       TEXT NOT NULL DEFAULT '',
+                rules         TEXT NOT NULL DEFAULT '',
+                design        TEXT NOT NULL DEFAULT '',
+                active        INTEGER NOT NULL DEFAULT 1,
+                created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+
+            -- Agentlarga buyruqlar/qoidalar ("har doim...", "hech qachon...")
+            CREATE TABLE IF NOT EXISTS rules (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent         TEXT NOT NULL DEFAULT 'all',    -- all | copywriter | planner | designer | manager
+                content       TEXT NOT NULL,
+                status        TEXT NOT NULL DEFAULT 'active', -- active | off | proposed (O'qituvchi taklifi)
+                source        TEXT NOT NULL DEFAULT 'manual', -- manual | trainer | seed
+                created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+
+            -- Agent promptlarining versiyalari (eng oxirgisi — amaldagi; bo'lmasa prompts/*.md fayli)
+            CREATE TABLE IF NOT EXISTS prompt_versions (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                name          TEXT NOT NULL,                  -- masalan copywriter/write
+                content       TEXT NOT NULL,
+                note          TEXT NOT NULL DEFAULT '',
+                created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_prompt_versions_name ON prompt_versions(name, id);
+
+            -- Mahsulotlar katalogi (web'dan tahrirlanadi; config/products.php bilan birlashtiriladi)
+            CREATE TABLE IF NOT EXISTS products (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                type           TEXT NOT NULL DEFAULT 'outbound',
+                active         INTEGER NOT NULL DEFAULT 1,
+                name           TEXT NOT NULL,
+                price          TEXT NOT NULL DEFAULT '',
+                dates          TEXT NOT NULL DEFAULT '',
+                duration       TEXT NOT NULL DEFAULT '',
+                hotels         TEXT NOT NULL DEFAULT '',
+                includes       TEXT NOT NULL DEFAULT '',
+                excludes       TEXT NOT NULL DEFAULT '',
+                seats          TEXT NOT NULL DEFAULT '',
+                offer          TEXT NOT NULL DEFAULT '',
+                selling_points TEXT NOT NULL DEFAULT '',      -- har qatorda bittadan
+                created_at     TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+
+            CREATE TABLE IF NOT EXISTS meta (
+                key           TEXT PRIMARY KEY,
+                value         TEXT NOT NULL
+            );
         SQL);
+
+        self::addColumn($pdo, 'house_examples', 'note', "TEXT NOT NULL DEFAULT ''");
+        self::seed($pdo);
+    }
+
+    private static function addColumn(PDO $pdo, string $table, string $column, string $definition): void
+    {
+        $columns = array_column($pdo->query("PRAGMA table_info($table)")->fetchAll(), 'name');
+        if (!in_array($column, $columns, true)) {
+            $pdo->exec("ALTER TABLE $table ADD COLUMN $column $definition");
+        }
+    }
+
+    /** Boshlang'ich shablon va qoidalar — faqat bir marta (keyin o'chirsangiz qaytib kelmaydi). */
+    private static function seed(PDO $pdo): void
+    {
+        if ($pdo->query("SELECT 1 FROM meta WHERE key = 'seeded'")->fetch() || !is_file(ROOT . '/config/seed.php')) {
+            return;
+        }
+        $seed = require ROOT . '/config/seed.php';
+        $pdo->beginTransaction();
+        $tpl = $pdo->prepare('INSERT INTO templates (name, format, tourism_type, stage, structure, example, rules, design)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($seed['templates'] as $t) {
+            $tpl->execute([$t['name'], $t['format'], $t['tourism_type'], $t['stage'], $t['structure'],
+                           $t['example'] ?? '', $t['rules'] ?? '', $t['design'] ?? '']);
+        }
+        $rule = $pdo->prepare("INSERT INTO rules (agent, content, source) VALUES (?, ?, 'seed')");
+        foreach ($seed['rules'] as [$agent, $content]) {
+            $rule->execute([$agent, $content]);
+        }
+        $pdo->exec("INSERT INTO meta (key, value) VALUES ('seeded', datetime('now'))");
+        $pdo->commit();
     }
 }

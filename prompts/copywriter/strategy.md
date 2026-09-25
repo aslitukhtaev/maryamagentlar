@@ -20,6 +20,8 @@ Bu — haftalik kontent-rejadagi bitta band (masalan faqat bitta Reels yoki karu
 shu formatga va brifdagi g'oyaga moslab tuz; burchaklardan birinchisi eng kuchlisi bo'lsin.
 
 ## Qoidalar
+- "company_rules" — kompaniya rahbarining qoidalari, strategiya ularga zid bo'lmasin.
+- "template" berilgan bo'lsa — strategiyani shu shablon maqsadiga (qamrov/ishonch/sotuv) moslab tuz.
 - Meta (Instagram/Facebook) reklama siyosati: auditoriyaning shaxsiy xususiyatini (dini, sog'lig'i,
   moliyaviy ahvoli, yoshi) "Siz ...siz" tarzida da'vo qiluvchi burchak TANLAMA.
 - Umra/Haj kabi diniy mavzularda hurmat birinchi o'rinda.

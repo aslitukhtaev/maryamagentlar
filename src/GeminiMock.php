@@ -21,7 +21,19 @@ class GeminiMock
         $started = microtime(true);
         
         // System prompt'dan agentni aniqlang
-        if (str_contains($system, 'kontent-strategisan')) {
+        if (str_contains($system, 'QAYTA ISHLATILADIGAN SHABLON')) {
+            $data = $this->mockTemplate();
+        } elseif (str_contains($system, "O'QITUVCHISI")) {
+            $data = $this->mockRules();
+        } elseif (str_contains($system, 'grafik dizaynerisan')) {
+            $data = [
+                'layout' => ['1080x1350', "Sarlavha (yuqori 1/3, oq, qalin): ISTANBUL", "Narx plashkasi (pastki chap, oltin): 775$ dan", "Pastki lenta (to'q yashil): 55-303-22-22 · logotip"],
+                'image_prompt' => 'Galata tower at golden hour, Istanbul rooftops, clean negative space at the top third, no text, no watermark, no typography',
+                'alt_text' => "Istanbul, Galata minorasi oqshom yorug'ida",
+            ];
+        } elseif (str_contains($system, "bo'limining boshlig'isan")) {
+            $data = ['action' => 'chat', 'reply' => 'Mock javob', 'ask_field' => '', 'brief' => [], 'knowledge' => []];
+        } elseif (str_contains($system, 'kontent-strategisan')) {
             $data = $this->mockPlan();
         } elseif (str_contains($system, 'strategisan')) {
             $data = $this->mockStrategy();
@@ -42,13 +54,35 @@ class GeminiMock
         ];
     }
 
+    private function mockRules(): array
+    {
+        return [
+            'rules' => [
+                ['agent' => 'copywriter', 'content' => "Hookda manzil nomi birinchi 5 so'z ichida bo'lsin.", 'reason' => "Past baholangan postlarda manzil kech tilga olingan"],
+                ['agent' => 'copywriter', 'content' => "Postda 6 tadan ortiq emoji ishlatma.", 'reason' => "Izoh: 'emoji juda ko'p'"],
+            ],
+            'summary' => "Agentlar ishonch omillarini yaxshi yozadi, lekin hook ko'pincha uzun.",
+        ];
+    }
+
+    private function mockTemplate(): array
+    {
+        return [
+            'name' => 'Qaynoq tur — narx va sana bilan',
+            'format' => 'post', 'stage' => 'sotuv', 'tourism_type' => 'outbound',
+            'structure' => "🔥 {JOY} — {NARX} dan\n📅 {SANALAR}\n✅ {KIRADI}\n📩 {CTA}",
+            'rules' => "Narx va sana majburiy. Bitta CTA.",
+            'design' => "1080x1350, manzil fotosi, oltin narx plashkasi, yashil lenta.",
+        ];
+    }
+
     private function mockPlan(): array
     {
         return [
             'week_focus' => "Ramazon Umrasi erta bronini boshlash va ishonchni mustahkamlash",
             'items' => [
                 ['day' => 'Dushanba', 'format' => 'reels', 'tourism_type' => 'umra', 'goal' => 'lid',
-                 'topic' => "Ramazonda Umra: nega hozirdan bron qilish kerak", 'idea' => "Ramazon guruhlari tez to'lishini ko'rsatamiz", 'product_id' => '', 'why' => "Ramazonga 4 oy qoldi"],
+                 'topic' => "Ramazonda Umra: nega hozirdan bron qilish kerak", 'idea' => "Ramazon guruhlari tez to'lishini ko'rsatamiz", 'product_id' => '', 'why' => "Ramazonga 4 oy qoldi", 'template_id' => 3],
                 ['day' => 'Chorshanba', 'format' => 'karusel', 'tourism_type' => 'umra', 'goal' => 'brend',
                  'topic' => "Umraga tayyorgarlik: 7 ta maslahat", 'idea' => "Foydali karusel — saqlanadi va ulashiladi", 'product_id' => '', 'why' => "Ishonch va saqlashlar"],
                 ['day' => 'Juma', 'format' => 'post', 'tourism_type' => 'ichki', 'goal' => 'jalb',

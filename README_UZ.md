@@ -86,9 +86,11 @@ src/
   Agents/
     Copywriter.php     Matn yozuvchi (3 bosqich)
     ContentPlanner.php Kontent-strateg (haftalik reja)
+    Trainer.php        O'qituvchi: baholardan qoida, postdan shablon
     Manager.php        Bo'lim boshlig'i (Telegram suhbat)
     GraphicDesigner.php Rasm
-  Marketing.php        Umumiy bilim: brend, katalog, kalendar
+  Marketing.php        Umumiy bilim: brend, katalog, kalendar, qoidalar, shablon
+  Prompts.php          Promptlar (web versiyasi yoki prompts/*.md)
   Gemini.php           Developer API (Free Tier limitli)
   GeminiVertex.php     Vertex AI (Cloud trial bilan)
   GeminiMock.php       Mock AI — sinov va demo
@@ -109,7 +111,9 @@ config/
   tones.php            Har turizm turi uchun ton profili
 
 public/
-  index.php            Web UI (brauzer)
+  index.php            Web: O'qitish markazi (router)
+web/
+  layout.php, actions.php, pages/   Web sahifalari
 
 data/
   maryam.db            SQLite (avtomatik yaratiladi)
@@ -185,16 +189,26 @@ php bin/copywriter.php rate 123 5 "zo'r hook, aniq CTA"
 
 Keyingi safar shu turizm turi bo'yicha yuqori baholanganlari "namuna" bo'lib beriladi.
 
-## Web UI
+## Web: O'qitish markazi
 
-```bash
-php -S localhost:8000 -t public
-```
+`WEB_OCHISH.bat` ni ikki marta bosing (yoki `php -S localhost:8000 -t public`) → http://localhost:8000
 
-Browser'da: http://localhost:8000
-- Yangi brif yarating
-- Variantlarni ko'ring
-- Baholang va izoh yozing
+| Bo'lim | Nima qiladi |
+|---|---|
+| **Bosh sahifa** | Agentlar qanchalik o'qitilgani va keyingi qadamlar |
+| **Studiya** | Mavzu + shablon → tayyor matn. Baholash, "Oltin namuna qilish", "Dizayn tayyorlash" |
+| **Haftalik reja** | Kontent-strateg reja tuzadi, har band shablon bo'yicha yoziladi |
+| **Shablonlar** | Post tuzilmalari (`{JOY}`, `{NARX}` slotlari bilan), qoidalar, dizayn ko'rsatmasi. Eng yaxshi postdan AI shablon yasaydi |
+| **Qoidalar** | "Har doim / hech qachon" buyruqlari (agent bo'yicha). O'qituvchi baholaringizdan yangi qoida taklif qiladi |
+| **Oltin namunalar** | Uslub o'rgatadigan eng yaxshi postlar |
+| **Promptlar** | Har agent yo'riqnomasi — versiyalar bilan, xohlagan payt qaytarish mumkin |
+| **Katalog / Bilimlar** | Turlar (narx, sana, mehmonxona) va kompaniya faktlari |
+
+**O'qitish sikli:** siz o'rgatasiz (shablon, qoida, namuna) → agentlar yozadi → siz baholab izoh yozasiz →
+O'qituvchi izohlardan qoida taklif qiladi → siz tasdiqlaysiz. Boshlang'ich 8 ta shablon va 8 ta qoida
+Instagram tahlili asosida tayyorlab qo'yilgan.
+
+Sinov (real AI'siz): `.env`da `WEB_MOCK=1`. Tarmoqda ochsangiz: `WEB_PASSWORD=...`.
 
 ## Ma'lumotlar Bazasi
 

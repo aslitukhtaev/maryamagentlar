@@ -13,20 +13,35 @@ use DateTimeImmutable;
  */
 final class Marketing
 {
-    private static ?array $products = null;
+    private static ?array $fileProducts = null;
+    private static ?Store $store = null;
     private static ?array $settings = null;
+
+    /** Bazadagi (web'da kiritilgan) katalogni ham o'qish uchun — bootstrap chaqiradi. */
+    public static function useStore(Store $store): void
+    {
+        self::$store = $store;
+    }
 
     public static function settings(): array
     {
         return self::$settings ??= require ROOT . '/config/marketing.php';
     }
 
-    /** Sotuvdagi turlar (ixtiyoriy: faqat bitta turizm turi bo'yicha). */
+    /** Sotuvdagi turlar: web katalogi + config/products.php (ixtiyoriy: bitta turizm turi bo'yicha). */
     public static function products(?string $type = null): array
     {
-        self::$products ??= is_file(ROOT . '/config/products.php') ? require ROOT . '/config/products.php' : [];
+        self::$fileProducts ??= is_file(ROOT . '/config/products.php') ? require ROOT . '/config/products.php' : [];
+        $dbProducts = array_map(static function (array $p) {
+            $p['id'] = 'p' . $p['id'];
+            $p['active'] = (bool) $p['active'];
+            $p['selling_points'] = array_values(array_filter(array_map('trim', explode("\n", $p['selling_points']))));
+            unset($p['created_at']);
+            return $p;
+        }, self::$store ? self::$store->rows('products') : []);
+
         return array_values(array_filter(
-            self::$products,
+            [...$dbProducts, ...self::$fileProducts],
             static fn (array $p) => ($p['active'] ?? true) && ($type === null || ($p['type'] ?? '') === $type)
         ));
     }
@@ -38,6 +53,27 @@ final class Marketing
             static fn (array $p) => array_filter($p, static fn ($v, $k) => $k !== 'active' && $v !== '' && $v !== [], ARRAY_FILTER_USE_BOTH),
             self::products($type)
         );
+    }
+
+    /**
+     * Agentga o'rgatilgan hamma narsa: faol qoidalar va (berilsa) tanlangan shablon.
+     * Barcha agentlar shu orqali oladi — O'qitish markazida o'zgartirsangiz, darhol ta'sir qiladi.
+     */
+    public static function training(Store $store, string $agent, ?int $templateId = null): array
+    {
+        $out = ['company_rules' => $store->activeRules($agent)];
+        $t = $templateId ? $store->row('templates', $templateId) : null;
+        if ($t) {
+            $out['template'] = array_filter([
+                'nomi' => $t['name'],
+                'format' => $t['format'],
+                'tuzilma' => $t['structure'],
+                'namuna' => $t['example'],
+                'qoidalar' => $t['rules'],
+                'dizayn' => $t['design'],
+            ], static fn ($v) => $v !== '');
+        }
+        return $out;
     }
 
     /** config/brand.php + Telegram orqali o'rgatilgan faktlar. */

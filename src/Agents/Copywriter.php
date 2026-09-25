@@ -6,6 +6,7 @@ namespace Maryam\Agents;
 
 use Maryam\Brief;
 use Maryam\Marketing;
+use Maryam\Prompts;
 use Maryam\Store;
 
 /**
@@ -46,7 +47,8 @@ final class Copywriter
      * @param array $options 'tone' => Manager bergan ton profili (ixtiyoriy),
      *                       'progress' => fn(string $xabar) — jarayon haqida xabar berish uchun,
      *                       'format' => post|reels|karusel|reklama — kontent-reja bandi uchun bitta
-     *                                   tayyor matn (4 ta variant o'rniga)
+     *                                   tayyor matn (4 ta variant o'rniga),
+     *                       'template_id' => O'qitish markazidagi shablon (formatni ham belgilaydi)
      * @return array{brief_id: int, strategy: array, hooks: array, variants: array, placeholders: array}
      */
     public function run(array $brief, array $options = []): array
@@ -63,7 +65,10 @@ final class Copywriter
             'tone_profile' => $tone,
             'house_style_examples' => $this->store->houseExamples($brief['tourism_type']),
         ];
-        $format = $options['format'] ?? null;
+        // O'qitish markazi: faol qoidalar va tanlangan shablon
+        $templateId = isset($options['template_id']) ? (int) $options['template_id'] : null;
+        $context += Marketing::training($this->store, self::NAME, $templateId);
+        $format = $options['format'] ?? ($context['template']['format'] ?? null);
         if ($format !== null) {
             $context['deliverable'] = [
                 'format' => $format,
@@ -82,6 +87,13 @@ final class Copywriter
             'bad_examples' => $this->store->ratedExamples($brief['tourism_type'], false),
         ], 1.0);
         $variants = array_map([$this, 'normalizeVariant'], $draft['variants'] ?? []);
+        if ($format !== null) {
+            // Reja bandi / shablon: bitta tayyor material kerak (AI ko'proq qaytarsa ham)
+            $variants = array_slice($variants, 0, 1);
+            if ($variants && $variants[0]['format'] === '') {
+                $variants[0]['format'] = $format;
+            }
+        }
 
         // 3-bosqich: tahrir. Birinchi raundda hammasi, keyingisida faqat muammolilari.
         $toEdit = array_keys($variants);
@@ -120,22 +132,18 @@ final class Copywriter
             'hooks' => array_values(array_filter(array_map('strval', $draft['hooks'] ?? []))),
             'variants' => $variants,
             'placeholders' => $this->placeholders($variants),
+            'format' => $format,
+            'template_id' => $templateId,
         ];
         $this->store->saveResult($briefId, self::NAME, 'final', $result);
         return $result;
     }
 
-    /** Bitta AI so'rovi: prompts/copywriter/<step>.md + kontekst (JSON) -> javob (massiv). */
+    /** Bitta AI so'rovi: copywriter/<step> prompti (web'dagi versiya yoki fayl) + kontekst. */
     private function ask(int $briefId, string $step, array $context, float $temperature, bool $smart = false): array
     {
-        $promptFile = preg_replace('/_\d+$/', '', $step); // edit_2 -> edit
-        $system = file_get_contents(ROOT . "/prompts/copywriter/$promptFile.md");
-        $user = "Kontekst (JSON):\n" . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
-              . "\n\nVazifani bajar va faqat ko'rsatilgan formatdagi JSON qaytar.";
-
-        $result = $this->ai->json($system, $user, $temperature, $smart);
-        $this->store->logRun($briefId, self::NAME, $step, $user, $result);
-        return $result['data'] ?? $result;
+        $prompt = 'copywriter/' . preg_replace('/_\d+$/', '', $step); // edit_2 -> edit
+        return Prompts::ask($this->ai, $this->store, $prompt, $context, $temperature, $smart, $briefId, self::NAME, $step);
     }
 
     /** AI qaytargan variantni bir xil shaklga keltiradi (yetishmagan maydonlar bo'sh bo'ladi). */

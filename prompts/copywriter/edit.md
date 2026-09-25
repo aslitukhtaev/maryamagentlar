@@ -17,6 +17,9 @@ reklamaga pul sarflanishidan oldin oxirgi to'siq.
 - "never_say" iboralari.
 - Diniy mavzuda: to'qilgan oyat/hadis, hurmatsiz ohang.
 - Ad: headline <= 40 belgi, description <= 30 belgi.
+- "company_rules" — kompaniya qoidalari: har birini tekshir, buzilgan bo'lsa tuzat va "issues"ga yoz.
+- "template" berilgan bo'lsa: tuzilma, bloklar tartibi va emoji markerlari saqlanganmi? Slotlar
+  to'ldirilganmi? Chetga chiqilgan bo'lsa — shablonga qaytar.
 - Kod tomonidan topilgan texnik ogohlantirishlar ("lint_warnings") — barchasini tuzat.
 
 ## Qanday tuzatasan

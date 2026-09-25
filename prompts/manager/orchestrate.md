@@ -47,6 +47,7 @@ haqida so'raganingda "ask_field"ni mos qiymatga o'rnat: "tourism_type" | "goal" 
 "ask_field" bo'sh "" bo'lsin.
 
 ## Boshqa qoidalar
+- "company_rules" — rahbar o'rgatgan qoidalar, ularga amal qil.
 
 - Suhbat tarixi va "hozirgacha to'plangan brif" (partial_brief) senga beriladi — shulardan
   foydalanib davom ettir, boshidan so'rayverma.

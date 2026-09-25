@@ -23,6 +23,17 @@ Maryam\Env::load(ROOT . '/.env');
 // Haftalik reja va fayl sanalari O'zbekiston vaqti bo'yicha bo'lsin
 date_default_timezone_set(Maryam\Env::get('TIMEZONE', 'Asia/Tashkent'));
 
+/** Bitta baza ulanishi — hamma kirish nuqtalari uchun umumiy. */
+function appStore(): Maryam\Store
+{
+    static $store = null;
+    if ($store === null) {
+        $store = new Maryam\Store(Maryam\Database::connect(ROOT . '/' . Maryam\Env::get('DB_PATH', 'data/maryam.db')));
+        Maryam\Marketing::useStore($store);
+    }
+    return $store;
+}
+
 /** Barcha agentlar uchun umumiy "qutilar": AI mijoz, baza, brend va ton sozlamalari. */
 function app(): array
 {
@@ -36,7 +47,7 @@ function app(): array
                 Maryam\Env::get('GEMINI_MODEL_SMART') ?: $model,
                 array_filter(array_map('trim', explode(',', Maryam\Env::get('GEMINI_MODEL_FALLBACK', '')))),
             ),
-            'store' => new Maryam\Store(Maryam\Database::connect(ROOT . '/' . Maryam\Env::get('DB_PATH', 'data/maryam.db'))),
+            'store' => appStore(),
             'brand' => require ROOT . '/config/brand.php',
             'tones' => require ROOT . '/config/tones.php',
         ];
@@ -81,7 +92,7 @@ function appVertex(): array
                 Maryam\Env::get('VERTEX_MODEL_SMART', 'gemini-2.5-pro'),
                 $fallbackModels,
             ),
-            'store' => new Maryam\Store(Maryam\Database::connect(ROOT . '/' . Maryam\Env::get('DB_PATH', 'data/maryam.db'))),
+            'store' => appStore(),
             'brand' => require ROOT . '/config/brand.php',
             'tones' => require ROOT . '/config/tones.php',
         ];

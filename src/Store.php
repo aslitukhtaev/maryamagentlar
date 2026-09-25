@@ -123,22 +123,25 @@ final class Store
 
     // ==================== UY USLUBI (kompaniyaning o'z namuna postlari) ====================
 
-    public function addHouseExample(string $content, string $tourismType = ''): void
+    public function addHouseExample(string $content, string $tourismType = '', string $note = ''): void
     {
-        $this->db->prepare('INSERT INTO house_examples (tourism_type, content) VALUES (?, ?)')
-            ->execute([$tourismType, $content]);
+        $this->db->prepare('INSERT INTO house_examples (tourism_type, content, note) VALUES (?, ?, ?)')
+            ->execute([$tourismType, $content, $note]);
     }
 
     /** Shu yo'nalish bo'yicha va umumiy namunalar, eng yangilari birinchi. */
     public function houseExamples(string $tourismType, int $limit = 5): array
     {
-        $st = $this->db->prepare("SELECT content FROM house_examples WHERE tourism_type IN (?, '')
+        $st = $this->db->prepare("SELECT content, note FROM house_examples WHERE tourism_type IN (?, '')
                                   ORDER BY (tourism_type = ?) DESC, id DESC LIMIT ?");
         $st->bindValue(1, $tourismType);
         $st->bindValue(2, $tourismType);
         $st->bindValue(3, $limit, PDO::PARAM_INT);
         $st->execute();
-        return array_column($st->fetchAll(), 'content');
+        return array_map(
+            static fn ($r) => $r['note'] !== '' ? ['post' => $r['content'], 'nega_yaxshi' => $r['note']] : $r['content'],
+            $st->fetchAll()
+        );
     }
 
     // ==================== HAFTALIK KONTENT-REJALAR ====================
@@ -171,6 +174,170 @@ final class Store
             }
         }
         return $topics;
+    }
+
+    // ==================== O'QITISH MARKAZI: umumiy CRUD ====================
+
+    /** Web'dan tahrirlanadigan jadvallar va ularning ustunlari (boshqasiga yozib bo'lmaydi). */
+    public const EDITABLE = [
+        'templates' => ['name', 'format', 'tourism_type', 'stage', 'structure', 'example', 'rules', 'design', 'active'],
+        'rules' => ['agent', 'content', 'status', 'source'],
+        'products' => ['type', 'active', 'name', 'price', 'dates', 'duration', 'hotels', 'includes', 'excludes', 'seats', 'offer', 'selling_points'],
+        'house_examples' => ['tourism_type', 'content', 'note'],
+        'knowledge' => ['category', 'content'],
+    ];
+
+    public function rows(string $table): array
+    {
+        $this->assertTable($table);
+        return $this->db->query("SELECT * FROM $table ORDER BY id DESC")->fetchAll();
+    }
+
+    public function row(string $table, int $id): ?array
+    {
+        $this->assertTable($table);
+        $st = $this->db->prepare("SELECT * FROM $table WHERE id = ?");
+        $st->execute([$id]);
+        return $st->fetch() ?: null;
+    }
+
+    public function insertRow(string $table, array $data): int
+    {
+        $data = $this->onlyEditable($table, $data);
+        $cols = implode(', ', array_keys($data));
+        $marks = implode(', ', array_fill(0, count($data), '?'));
+        $this->db->prepare("INSERT INTO $table ($cols) VALUES ($marks)")->execute(array_values($data));
+        return (int) $this->db->lastInsertId();
+    }
+
+    public function updateRow(string $table, int $id, array $data): void
+    {
+        $data = $this->onlyEditable($table, $data);
+        if (!$data) {
+            return;
+        }
+        $set = implode(', ', array_map(static fn ($c) => "$c = ?", array_keys($data)));
+        $this->db->prepare("UPDATE $table SET $set WHERE id = ?")->execute([...array_values($data), $id]);
+    }
+
+    public function deleteRow(string $table, int $id): void
+    {
+        $this->assertTable($table);
+        $this->db->prepare("DELETE FROM $table WHERE id = ?")->execute([$id]);
+    }
+
+    private function onlyEditable(string $table, array $data): array
+    {
+        $this->assertTable($table);
+        return array_intersect_key($data, array_flip(self::EDITABLE[$table]));
+    }
+
+    private function assertTable(string $table): void
+    {
+        if (!isset(self::EDITABLE[$table])) {
+            throw new \InvalidArgumentException("Noma'lum jadval: $table");
+        }
+    }
+
+    // ==================== QOIDALAR, SHABLONLAR, PROMPTLAR ====================
+
+    /** Agentga tegishli faol qoidalar ('all' + shu agent). */
+    public function activeRules(string $agent): array
+    {
+        $st = $this->db->prepare("SELECT content FROM rules WHERE status = 'active' AND agent IN ('all', ?) ORDER BY id");
+        $st->execute([$agent]);
+        return array_column($st->fetchAll(), 'content');
+    }
+
+    /** Faol shablonlar; format/yo'nalish berilsa — shunga moslari ('' = hammasiga mos). */
+    public function activeTemplates(?string $format = null, ?string $tourismType = null): array
+    {
+        $sql = 'SELECT * FROM templates WHERE active = 1';
+        $args = [];
+        if ($format !== null) {
+            $sql .= ' AND format = ?';
+            $args[] = $format;
+        }
+        if ($tourismType !== null) {
+            $sql .= " AND tourism_type IN ('', ?)";
+            $args[] = $tourismType;
+        }
+        $st = $this->db->prepare($sql . ' ORDER BY id');
+        $st->execute($args);
+        return $st->fetchAll();
+    }
+
+    public function latestPrompt(string $name): ?array
+    {
+        $st = $this->db->prepare('SELECT * FROM prompt_versions WHERE name = ? ORDER BY id DESC LIMIT 1');
+        $st->execute([$name]);
+        return $st->fetch() ?: null;
+    }
+
+    public function promptVersions(string $name): array
+    {
+        $st = $this->db->prepare('SELECT id, note, created_at, length(content) AS size FROM prompt_versions WHERE name = ? ORDER BY id DESC');
+        $st->execute([$name]);
+        return $st->fetchAll();
+    }
+
+    public function promptVersion(int $id): ?array
+    {
+        $st = $this->db->prepare('SELECT * FROM prompt_versions WHERE id = ?');
+        $st->execute([$id]);
+        return $st->fetch() ?: null;
+    }
+
+    public function savePromptVersion(string $name, string $content, string $note = ''): void
+    {
+        $this->db->prepare('INSERT INTO prompt_versions (name, content, note) VALUES (?, ?, ?)')
+            ->execute([$name, $content, $note]);
+    }
+
+    /** O'qituvchi agent uchun: izoh yozilgan baholar (eng yangilari). */
+    public function ratedWithFeedback(int $limit = 40): array
+    {
+        $st = $this->db->prepare("SELECT v.id, v.data, v.rating, v.feedback, b.topic, b.tourism_type FROM copy_variants v
+                                  JOIN briefs b ON b.id = v.brief_id
+                                  WHERE v.rating IS NOT NULL ORDER BY v.id DESC LIMIT ?");
+        $st->bindValue(1, $limit, PDO::PARAM_INT);
+        $st->execute();
+        return $st->fetchAll();
+    }
+
+    public function variant(int $id): ?array
+    {
+        $st = $this->db->prepare('SELECT v.*, b.tourism_type FROM copy_variants v JOIN briefs b ON b.id = v.brief_id WHERE v.id = ?');
+        $st->execute([$id]);
+        $row = $st->fetch();
+        return $row ? ['db_id' => (int) $row['id'], 'rating' => $row['rating'], 'feedback' => $row['feedback'],
+                       'tourism_type' => $row['tourism_type']] + json_decode($row['data'], true) : null;
+    }
+
+    public function recentPlans(int $limit = 12): array
+    {
+        $st = $this->db->prepare('SELECT week, created_at FROM content_plans ORDER BY week DESC LIMIT ?');
+        $st->bindValue(1, $limit, PDO::PARAM_INT);
+        $st->execute();
+        return $st->fetchAll();
+    }
+
+    /** Bosh sahifa uchun raqamlar. */
+    public function stats(): array
+    {
+        $one = fn (string $sql) => $this->db->query($sql)->fetchColumn();
+        return [
+            'templates' => (int) $one('SELECT COUNT(*) FROM templates WHERE active = 1'),
+            'rules' => (int) $one("SELECT COUNT(*) FROM rules WHERE status = 'active'"),
+            'proposed' => (int) $one("SELECT COUNT(*) FROM rules WHERE status = 'proposed'"),
+            'examples' => (int) $one('SELECT COUNT(*) FROM house_examples'),
+            'products' => (int) $one('SELECT COUNT(*) FROM products WHERE active = 1'),
+            'knowledge' => (int) $one('SELECT COUNT(*) FROM knowledge'),
+            'briefs' => (int) $one('SELECT COUNT(*) FROM briefs'),
+            'rated' => (int) $one('SELECT COUNT(*) FROM copy_variants WHERE rating IS NOT NULL'),
+            'avg_rating' => (float) $one('SELECT AVG(rating) FROM (SELECT rating FROM copy_variants WHERE rating IS NOT NULL ORDER BY id DESC LIMIT 20)'),
+            'unrated' => (int) $one('SELECT COUNT(*) FROM copy_variants WHERE rating IS NULL'),
+        ];
     }
 
     // ==================== SUHBAT HOLATI (Telegram orchestrator uchun) ====================

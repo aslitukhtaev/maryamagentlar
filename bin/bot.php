@@ -133,7 +133,14 @@ function processTurn(string $token, Manager $manager, ContentPlanner $planner, $
         // Grafik dizayner: matn bilan bir vaqtda rasm ham tayyorlanadi
         tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'upload_photo']);
         $designer = new GraphicDesigner($ai, $store, $brand, $tones);
-        $design = $designer->run($brief, $cw['strategy'] ?? [], ['progress' => static fn () => null]);
+        $design = $designer->run($brief, $cw['strategy'] ?? [], [
+            'progress' => static fn () => null,
+            'template_id' => $cw['template_id'] ?? null,
+            'variant' => $cw['variants'][0] ?? null,
+        ]);
+        if ($design['layout']) {
+            $tg->send("🎨 Maket:\n— " . implode("\n— ", $design['layout']));
+        }
 
         if ($design['image_generated'] && $design['image_path']) {
             $tg->sendPhoto($design['image_path'], "🎨 " . ($design['alt_text'] ?: 'Post uchun rasm'));

@@ -7,6 +7,7 @@ namespace Maryam\Agents;
 use InvalidArgumentException;
 use Maryam\Brief;
 use Maryam\Marketing;
+use Maryam\Prompts;
 use Maryam\Store;
 
 /**
@@ -61,13 +62,8 @@ final class Manager
             'languages' => array_keys(Brief::LANGUAGES),
         ];
 
-        $system = file_get_contents(ROOT . '/prompts/manager/orchestrate.md');
-        $user = "Kontekst (JSON):\n" . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
-              . "\n\nVazifani bajar va faqat ko'rsatilgan formatdagi JSON qaytar.";
-
-        $result = $this->ai->json($system, $user, 0.4, true);
-        $this->store->logRun(null, self::NAME, 'orchestrate', $user, $result);
-        $data = $result['data'] ?? [];
+        $context += Marketing::training($this->store, self::NAME);
+        $data = Prompts::ask($this->ai, $this->store, 'manager/orchestrate', $context, 0.4, true, null, self::NAME, 'orchestrate');
 
         $action = (string) ($data['action'] ?? 'chat');
         $reply = trim((string) ($data['reply'] ?? "Kechirasiz, tushunmadim, boshqacha ayting."));
