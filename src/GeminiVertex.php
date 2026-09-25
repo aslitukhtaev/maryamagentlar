@@ -229,7 +229,13 @@ class GeminiVertex
             }
         }
 
-        // 3) Oxirgi zaxira: gcloud CLI orqali (agar PATH'da bo'lsa)
+        // 3) Google Cloud serveri (VM) ichida — serverning o'z service account'i (kalit fayl shart emas)
+        $metadataToken = self::metadataToken();
+        if ($metadataToken !== null) {
+            return $metadataToken;
+        }
+
+        // 4) Oxirgi zaxira: gcloud CLI orqali (agar PATH'da bo'lsa)
         if (function_exists('exec')) {
             $nullDevice = self::isWindows() ? 'NUL' : '/dev/null';
             $out = [];
@@ -243,8 +249,26 @@ class GeminiVertex
             "Access token olib bo'lmadi. Tekshiring:\n"
             . "  1. `gcloud auth application-default login` qilinganmi?\n"
             . "  2. Fayl mavjudmi: " . (self::defaultAdcPath() ?? "(HOME/APPDATA aniqlanmadi)") . "\n"
-            . "  3. Yoki GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json o'rnatilganmi?"
+            . "  3. Yoki GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json o'rnatilganmi?\n"
+            . "  4. Google Cloud serverida: VM'ga 'cloud-platform' ruxsati va Vertex AI User roli berilganmi?"
         );
+    }
+
+    /** Google Cloud VM'ning metadata serveridan token; VM'dan tashqarida tezda null qaytaradi. */
+    private static function metadataToken(): ?string
+    {
+        $ch = curl_init('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 1,
+            CURLOPT_TIMEOUT => 3,
+            CURLOPT_HTTPHEADER => ['Metadata-Flavor: Google'],
+        ]);
+        $body = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        $token = $status === 200 ? (json_decode((string) $body, true)['access_token'] ?? null) : null;
+        return is_string($token) && $token !== '' ? $token : null;
     }
 
     private static function isWindows(): bool
