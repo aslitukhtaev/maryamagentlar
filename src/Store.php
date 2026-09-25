@@ -121,6 +121,58 @@ final class Store
         return array_column($st->fetchAll(), 'content');
     }
 
+    // ==================== UY USLUBI (kompaniyaning o'z namuna postlari) ====================
+
+    public function addHouseExample(string $content, string $tourismType = ''): void
+    {
+        $this->db->prepare('INSERT INTO house_examples (tourism_type, content) VALUES (?, ?)')
+            ->execute([$tourismType, $content]);
+    }
+
+    /** Shu yo'nalish bo'yicha va umumiy namunalar, eng yangilari birinchi. */
+    public function houseExamples(string $tourismType, int $limit = 5): array
+    {
+        $st = $this->db->prepare("SELECT content FROM house_examples WHERE tourism_type IN (?, '')
+                                  ORDER BY (tourism_type = ?) DESC, id DESC LIMIT ?");
+        $st->bindValue(1, $tourismType);
+        $st->bindValue(2, $tourismType);
+        $st->bindValue(3, $limit, PDO::PARAM_INT);
+        $st->execute();
+        return array_column($st->fetchAll(), 'content');
+    }
+
+    // ==================== HAFTALIK KONTENT-REJALAR ====================
+
+    public function savePlan(string $week, array $data): void
+    {
+        $this->db->prepare('INSERT INTO content_plans (week, data) VALUES (?, ?)
+                            ON CONFLICT(week) DO UPDATE SET data = excluded.data')
+            ->execute([$week, json_encode($data, JSON_UNESCAPED_UNICODE)]);
+    }
+
+    public function plan(string $week): ?array
+    {
+        $st = $this->db->prepare('SELECT data FROM content_plans WHERE week = ?');
+        $st->execute([$week]);
+        $row = $st->fetch();
+        return $row ? json_decode($row['data'], true) : null;
+    }
+
+    /** Oldingi haftalardagi mavzular — reja takrorlanmasligi uchun. */
+    public function recentPlanTopics(int $weeks = 4): array
+    {
+        $st = $this->db->prepare('SELECT data FROM content_plans ORDER BY week DESC LIMIT ?');
+        $st->bindValue(1, $weeks, PDO::PARAM_INT);
+        $st->execute();
+        $topics = [];
+        foreach ($st->fetchAll() as $row) {
+            foreach (json_decode($row['data'], true)['items'] ?? [] as $item) {
+                $topics[] = ($item['format'] ?? '') . ': ' . ($item['topic'] ?? '');
+            }
+        }
+        return $topics;
+    }
+
     // ==================== SUHBAT HOLATI (Telegram orchestrator uchun) ====================
 
     public function addChatMessage(string $chatId, string $role, string $content): void

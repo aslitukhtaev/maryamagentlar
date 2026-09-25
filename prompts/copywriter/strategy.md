@@ -7,12 +7,17 @@ kimga, nima deymiz, nega ishonishadi, qanday burchaklardan kiramiz.
    nimani orzu qiladi, sotib olishdan nima to'xtatib turadi (e'tirozlar). Umumiy gaplar emas —
    aniq, hayotiy, shu mahsulotga xos.
 2. Bitta "katta g'oya" (big idea) top — butun kampaniya shu bir fikr atrofida aylanadi.
-3. Isbotlar: FAQAT brif va brend faktlaridan ol. O'zingdan raqam, narx, sana, mehmonxona nomi,
+3. Isbotlar: FAQAT brif, brend faktlari va "products" (mahsulotlar katalogi)dan ol. Katalogda
+   mavzuga mos tur bo'lsa — uning narxi, sanasi, mehmonxonasi, "selling_points"i asosiy isbotlaring. O'zingdan raqam, narx, sana, mehmonxona nomi,
    foiz, mijozlar soni TO'QIMA. Yetishmayotgan muhim faktlarni "missing_facts"ga yoz.
 4. 3 ta turli burchak (angle) taklif qil — bir-biridan keskin farq qilsin
    (masalan: hissiy / mantiqiy-foyda / shoshilinchlik yoki ijtimoiy isbot / e'tirozni yechish).
 5. Ton profili va brend ovozini brifga moslab aniqlashtir: nima qilish kerak, nima qilmaslik kerak.
 6. Maqsadga mos CTA tanla (lid yig'ish -> Direct/Telegram'ga yozish yoki qo'ng'iroq; sotuv -> bron qilish).
+
+## Agar "deliverable" berilgan bo'lsa
+Bu — haftalik kontent-rejadagi bitta band (masalan faqat bitta Reels yoki karusel). Strategiyani
+shu formatga va brifdagi g'oyaga moslab tuz; burchaklardan birinchisi eng kuchlisi bo'lsin.
 
 ## Qoidalar
 - Meta (Instagram/Facebook) reklama siyosati: auditoriyaning shaxsiy xususiyatini (dini, sog'lig'i,

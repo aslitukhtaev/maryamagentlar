@@ -21,7 +21,9 @@ class GeminiMock
         $started = microtime(true);
         
         // System prompt'dan agentni aniqlang
-        if (str_contains($system, 'strategisan')) {
+        if (str_contains($system, 'kontent-strategisan')) {
+            $data = $this->mockPlan();
+        } elseif (str_contains($system, 'strategisan')) {
             $data = $this->mockStrategy();
         } elseif (str_contains($system, 'copywriter\'isan')) {
             $data = $this->mockWrite();
@@ -37,6 +39,22 @@ class GeminiMock
             'tokens_in' => 100,
             'tokens_out' => 200,
             'ms' => (int) ((microtime(true) - $started) * 1000 + mt_rand(50, 200)),
+        ];
+    }
+
+    private function mockPlan(): array
+    {
+        return [
+            'week_focus' => "Ramazon Umrasi erta bronini boshlash va ishonchni mustahkamlash",
+            'items' => [
+                ['day' => 'Dushanba', 'format' => 'reels', 'tourism_type' => 'umra', 'goal' => 'lid',
+                 'topic' => "Ramazonda Umra: nega hozirdan bron qilish kerak", 'idea' => "Ramazon guruhlari tez to'lishini ko'rsatamiz", 'product_id' => '', 'why' => "Ramazonga 4 oy qoldi"],
+                ['day' => 'Chorshanba', 'format' => 'karusel', 'tourism_type' => 'umra', 'goal' => 'brend',
+                 'topic' => "Umraga tayyorgarlik: 7 ta maslahat", 'idea' => "Foydali karusel — saqlanadi va ulashiladi", 'product_id' => '', 'why' => "Ishonch va saqlashlar"],
+                ['day' => 'Juma', 'format' => 'post', 'tourism_type' => 'ichki', 'goal' => 'jalb',
+                 'topic' => "Kuzgi Chimyon: dam olish kunlari uchun", 'idea' => "Oilaviy qisqa safar", 'product_id' => '', 'why' => "Kuzgi dam olish mavsumi"],
+            ],
+            'missing_info' => ["Ramazon Umrasi narxi va sanalari (config/products.php)"],
         ];
     }
 

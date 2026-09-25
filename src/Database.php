@@ -109,6 +109,23 @@ final class Database
                 brief_json    TEXT NOT NULL DEFAULT '{}',
                 updated_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
             );
+
+            -- Kompaniyaning o'z eng yaxshi postlari (kanaldan botga forward qilinadi) —
+            -- Copywriter shu uslubda yozishni o'rganadi.
+            CREATE TABLE IF NOT EXISTS house_examples (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                tourism_type  TEXT NOT NULL DEFAULT '',   -- '' = barcha yo'nalishlar uchun
+                content       TEXT NOT NULL,
+                created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+
+            -- Kontent-strateg tuzgan haftalik rejalar (bir hafta — bitta reja)
+            CREATE TABLE IF NOT EXISTS content_plans (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                week          TEXT NOT NULL UNIQUE,       -- masalan 2026-W39
+                data          TEXT NOT NULL,              -- reja + har band uchun tayyor matn (JSON)
+                created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
         SQL);
     }
 }

@@ -16,12 +16,14 @@ declare(strict_types=1);
 
 require __DIR__ . '/../src/bootstrap.php';
 
+use Maryam\Agents\ContentPlanner;
 use Maryam\Agents\Copywriter;
 use Maryam\Agents\GraphicDesigner;
 use Maryam\Agents\Manager;
 use Maryam\Brief;
 use Maryam\Env;
 use Maryam\Http;
+use Maryam\Marketing;
 use Maryam\Output;
 use Maryam\Telegram;
 
@@ -38,6 +40,7 @@ $allowed = array_filter(array_map('trim', explode(',', $allowedRaw)));
 
 ['ai' => $ai, 'store' => $store, 'brand' => $brand, 'tones' => $tones] = appVertex();
 $manager = new Manager($ai, $store, $brand, $tones);
+$planner = new ContentPlanner($ai, $store, $brand, $tones);
 
 /** Telegram Bot API'ga oddiy so'rov. */
 function tgCall(string $token, string $method, array $params = []): array
@@ -56,12 +59,37 @@ function tgCall(string $token, string $method, array $params = []): array
 }
 
 /**
+ * Haftalik kontent paketi: Kontent-strateg reja tuzadi, Copywriter har band uchun tayyor
+ * matn yozadi. Avval qisqa reja xabar bo'lib, keyin to'liq paket fayl bo'lib keladi.
+ */
+function sendWeeklyPack(string $token, ContentPlanner $planner, string $chatId, string $wishes = ''): void
+{
+    $lastPing = 0;
+    $plan = $planner->run(new DateTimeImmutable('today'), [
+        'wishes' => $wishes,
+        'progress' => function () use ($token, $chatId, &$lastPing) {
+            if (time() - $lastPing >= 4) {
+                tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'typing']);
+                $lastPing = time();
+            }
+        },
+    ]);
+
+    $tg = new Telegram($token, $chatId);
+    $meta = ['topic' => 'haftalik-reja-' . $plan['week'], 'id' => 0];
+    $path = Output::save($meta, 'kontent-paket.txt', ContentPlanner::toText($plan));
+    Output::save($meta, 'kontent-paket.json', json_encode($plan, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    $tg->send(ContentPlanner::planSummary($plan));
+    $tg->sendDocument($path, "📦 Haftalik kontent paketi — hammasi e'lon qilishga tayyor. Yoqmaganini ayting, qayta yozamiz.");
+}
+
+/**
  * Bitta "foydalanuvchi xabari" (matn yoki tugma bosilishi natijasida hosil bo'lgan matn)ni
  * to'liq qayta ishlaydi: Manager'dan tezkor qaror oladi, javob yuboradi (kerak bo'lsa
  * tugmalar bilan), va agar brif tayyor bo'lsa — Copywriter'ni fon jarayonida ishga tushirib,
  * natijani fayl qilib yuboradi.
  */
-function processTurn(string $token, Manager $manager, $store, $ai, array $brand, string $chatId, string $text, array $tones): void
+function processTurn(string $token, Manager $manager, ContentPlanner $planner, $store, $ai, array $brand, string $chatId, string $text, array $tones): void
 {
     tgCall($token, 'sendChatAction', ['chat_id' => $chatId, 'action' => 'typing']);
 
@@ -75,6 +103,11 @@ function processTurn(string $token, Manager $manager, $store, $ai, array $brand,
     }
     tgCall($token, 'sendMessage', $params);
     echo "   qaror: {$decision['action']}" . ($decision['ask_field'] ? " (so'ralmoqda: {$decision['ask_field']})" : '') . "\n";
+
+    if ($decision['action'] === 'run_plan') {
+        sendWeeklyPack($token, $planner, $chatId, $decision['plan_wishes']);
+        return;
+    }
 
     // Agar brif to'liq bo'lsa — Copywriter fon jarayonida ishlaydi (bir necha daqiqa
     // davom etishi mumkin, shuning uchun tezkor javobdan KEYIN, alohida ishga tushadi).
@@ -120,8 +153,29 @@ if ($allowed) {
     echo "   ⚠ TELEGRAM_CHAT_ID/TELEGRAM_ALLOWED_CHAT_IDS bo'sh — HAR KIM botga yoza oladi!\n";
 }
 
+$weekly = Marketing::settings()['weekly_plan'] ?? [];
+$autoTriedWeek = '';
+
 $offset = 0;
 while (true) {
+    // Har hafta belgilangan kun va soatda reja avtomatik tuziladi (shu hafta hali tuzilmagan bo'lsa)
+    $now = new DateTimeImmutable();
+    $week = ContentPlanner::weekKey($now);
+    if (($weekly['enabled'] ?? false) && $ownerChatId !== '' && $autoTriedWeek !== $week
+        && (int) $now->format('N') >= (int) ($weekly['weekday'] ?? 1)
+        && (int) $now->format('G') >= (int) ($weekly['hour'] ?? 9)
+        && $store->plan($week) === null) {
+        $autoTriedWeek = $week; // xato bo'lsa ham shu hafta qayta-qayta urinmaymiz
+        echo "🗓 Haftalik reja avtomatik tuzilmoqda ($week)...\n";
+        try {
+            tgCall($token, 'sendMessage', ['chat_id' => $ownerChatId, 'text' => "🗓 Yangi hafta! Kontent-reja va tayyor matnlarni tayyorlayapman, bir necha daqiqa..."]);
+            sendWeeklyPack($token, $planner, $ownerChatId);
+        } catch (Throwable $e) {
+            echo "❌ Haftalik reja xatosi: {$e->getMessage()}\n";
+            tgCall($token, 'sendMessage', ['chat_id' => $ownerChatId, 'text' => "⚠ Haftalik rejani tuzib bo'lmadi: {$e->getMessage()}\nQayta urinish uchun /reja yozing."]);
+        }
+    }
+
     $updates = tgCall($token, 'getUpdates', ['offset' => $offset, 'timeout' => 30]);
 
     if (!($updates['ok'] ?? false)) {
@@ -156,7 +210,7 @@ while (true) {
             try {
                 // Tugma bosilishi ham xuddi oddiy xabardek Manager'ga boradi —
                 // shunda suhbat tarixi va mantiq bitta joyda qoladi.
-                processTurn($token, $manager, $store, $ai, $brand, $chatId, $label, $tones);
+                processTurn($token, $manager, $planner, $store, $ai, $brand, $chatId, $label, $tones);
             } catch (Throwable $e) {
                 echo "❌ Xato: {$e->getMessage()}\n";
                 tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => "⚠ Xato yuz berdi: {$e->getMessage()}"]);
@@ -166,8 +220,9 @@ while (true) {
 
         // --- Oddiy matnli xabar ---
         $message = $update['message'] ?? null;
-        if ($message === null || !isset($message['text'])) {
-            continue; // rasm, ovoz va h.k. hozircha e'tiborsiz qoldiriladi
+        $text = trim((string) ($message['text'] ?? $message['caption'] ?? ''));
+        if ($message === null || $text === '') {
+            continue; // matnsiz rasm, ovoz va h.k. hozircha e'tiborsiz qoldiriladi
         }
 
         $chatId = (string) $message['chat']['id'];
@@ -176,20 +231,46 @@ while (true) {
             continue;
         }
 
-        $text = trim($message['text']);
+        // Kanaldan forward qilingan post — kompaniya uslubi namunasi sifatida saqlanadi
+        if (isset($message['forward_origin']) || isset($message['forward_date'])) {
+            $store->addHouseExample($text);
+            echo "→ [$chatId] (namuna saqlandi)\n";
+            tgCall($token, 'sendMessage', [
+                'chat_id' => $chatId,
+                'text' => "✅ Namuna sifatida saqlandi. Agentlar endi shu uslubda yozishga harakat qiladi. Eng yaxshi 10-20 ta postingizni shunday forward qiling.",
+            ]);
+            continue;
+        }
+
+        if ($text === '/reja' || str_starts_with($text, '/reja ')) {
+            echo "→ [$chatId] /reja\n";
+            try {
+                tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => "🗓 Haftalik reja va tayyor matnlar tayyorlanmoqda, bir necha daqiqa..."]);
+                sendWeeklyPack($token, $planner, $chatId, trim(substr($text, 5)));
+            } catch (Throwable $e) {
+                echo "❌ Xato: {$e->getMessage()}\n";
+                tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => "⚠ Xato yuz berdi: {$e->getMessage()}"]);
+            }
+            continue;
+        }
         echo "→ [$chatId] $text\n";
 
         if ($text === '/start') {
             tgCall($token, 'sendMessage', [
                 'chat_id' => $chatId,
-                'text' => "Salom! Men Maryam Travel'ning marketing yordamchisiman. Menga oddiy tilda ehtiyojingizni yozing — masalan \"Umra 2027 uchun post kerak\" yoki kompaniya haqida yangi fakt ayting, men eslab qolaman.",
+                'text' => "Salom! Men Maryam Travel marketing bo'limining boshlig'iman. Jamoam: kontent-strateg, copywriter, dizayner.\n\n"
+                    . "• Oddiy tilda yozing: \"Umra 2027 uchun post kerak\"\n"
+                    . "• /reja — haftalik kontent-reja + tayyor matnlar (har dushanba o'zim ham yuboraman)\n"
+                    . "• /reja Ramazon Umrasiga urg'u — istak bilan reja\n"
+                    . "• Kanalingizdagi eng yaxshi postlarni menga forward qiling — shu uslubda yozishni o'rganamiz\n"
+                    . "• Kompaniya haqida fakt ayting — eslab qolaman",
             ]);
             $store->addChatMessage($chatId, 'bot', '/start javobi');
             continue;
         }
 
         try {
-            processTurn($token, $manager, $store, $ai, $brand, $chatId, $text, $tones);
+            processTurn($token, $manager, $planner, $store, $ai, $brand, $chatId, $text, $tones);
         } catch (Throwable $e) {
             echo "❌ Xato: {$e->getMessage()}\n";
             tgCall($token, 'sendMessage', ['chat_id' => $chatId, 'text' => "⚠ Xato yuz berdi: {$e->getMessage()}"]);

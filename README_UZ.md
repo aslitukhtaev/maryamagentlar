@@ -42,17 +42,53 @@ Brif so'raladi. Javoblar bergsangiz, AI 3 bosqichda:
 2. **Yozish:** 5 hook + 2 post + 2 reklama
 3. **Tahrir:** muharrir har variantni baholaydi va yaxshilaydi
 
+## Marketing bo'limi — kontentni avtomatlashtirish
+
+Agentlar bitta marketing bo'limi bo'lib ishlaydi va umumiy bilimdan foydalanadi:
+
+| Kim | Nima qiladi |
+|---|---|
+| **Manager** (bo'lim boshlig'i) | Telegram'da siz bilan gaplashadi, topshiriqni kerakli mutaxassisga beradi |
+| **Kontent-strateg** | Har hafta mavsum, katalog va oldingi haftalarga qarab kontent-reja tuzadi |
+| **Copywriter** | Har band uchun tayyor matn: post, Reels ssenariysi, karusel slaydlari, reklama |
+| **Dizayner** | Matnga rasm tayyorlaydi |
+
+### Sifatni belgilaydigan 3 ta narsa (albatta to'ldiring)
+
+1. **`config/brand.php`** — telefon, Telegram, litsenziya, faktlar, afzalliklar (USP)
+2. **`config/products.php`** — sotuvdagi turlar: narx, sana, mehmonxona, aksiya.
+   Agentlar shu yerdan oladi — sizdan so'ramaydi va matnda `[NARX]` qolmaydi.
+3. **Sizning uslubingiz** — kanalingizdagi eng yaxshi 10-20 ta postni botga **forward** qiling.
+   Agentlar shu ohangda yozishni o'rganadi.
+
+### Haftalik kontent paketi
+
+- Har **dushanba 09:00** da bot o'zi reja + tayyor matnlarni yuboradi (`config/marketing.php`)
+- Yoki botga: `/reja` yoki `/reja Ramazon Umrasiga urg'u ber`
+- Yoki oddiy so'z bilan: "shu haftaga nima joylaymiz?"
+- Terminal: `php bin/reja.php` (sinov: `php bin/reja.php --mock`)
+
+`config/marketing.php` da: haftasiga nechta kontent, formatlar, yo'nalishlar ulushi va
+mavsumiy kalendar (Ramazon, hayitlar, Navro'z, ta'tillar — har biri necha kun oldin reklama
+boshlanishi bilan). Hijriy sanalar taxminiy — kerak bo'lsa tuzating.
+
 ## Arxitektura
 
 ```
 bin/
+  bot.php              Telegram bot — marketing bo'limi bilan suhbat
+  reja.php             Haftalik kontent-reja + tayyor matnlar
   copywriter.php       CLI — haqiqiy Gemini bilan
   demo.php             Demo — mock AI bilan (tez)
   test-vertex.php      Vertex AI test
 
 src/
   Agents/
-    Copywriter.php     Asosiy agent (3 bosqich)
+    Copywriter.php     Matn yozuvchi (3 bosqich)
+    ContentPlanner.php Kontent-strateg (haftalik reja)
+    Manager.php        Bo'lim boshlig'i (Telegram suhbat)
+    GraphicDesigner.php Rasm
+  Marketing.php        Umumiy bilim: brend, katalog, kalendar
   Gemini.php           Developer API (Free Tier limitli)
   GeminiVertex.php     Vertex AI (Cloud trial bilan)
   GeminiMock.php       Mock AI — sinov va demo
@@ -68,6 +104,8 @@ prompts/copywriter/
 
 config/
   brand.php            Maryam Travel faktlari
+  products.php         Sotuvdagi turlar katalogi
+  marketing.php        Kontent-reja sozlamalari + mavsumiy kalendar
   tones.php            Har turizm turi uchun ton profili
 
 public/

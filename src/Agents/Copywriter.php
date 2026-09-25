@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Maryam\Agents;
 
 use Maryam\Brief;
-use Maryam\Gemini;
+use Maryam\Marketing;
 use Maryam\Store;
 
 /**
@@ -44,7 +44,9 @@ final class Copywriter
     /**
      * @param array $brief   Brief::normalize() natijasi (ichida 'id' bo'lsa — mavjud brif ishlatiladi)
      * @param array $options 'tone' => Manager bergan ton profili (ixtiyoriy),
-     *                       'progress' => fn(string $xabar) — jarayon haqida xabar berish uchun
+     *                       'progress' => fn(string $xabar) — jarayon haqida xabar berish uchun,
+     *                       'format' => post|reels|karusel|reklama — kontent-reja bandi uchun bitta
+     *                                   tayyor matn (4 ta variant o'rniga)
      * @return array{brief_id: int, strategy: array, hooks: array, variants: array, placeholders: array}
      */
     public function run(array $brief, array $options = []): array
@@ -53,20 +55,21 @@ final class Copywriter
         $tone = $options['tone'] ?? $this->tones[$brief['tourism_type']];
         $briefId = $brief['id'] ?? $this->store->saveBrief($brief);
 
-        // Telegram orqali "o'rgatilgan" kompaniya faktlarini brend faktlariga qo'shamiz —
-        // shunda config/brand.php'ni qo'lda tahrirlamasdan ham agent yangi faktlarni biladi
-        $brandWithKnowledge = $this->brand;
-        $brandWithKnowledge['facts'] = array_values(array_unique(array_merge(
-            $this->brand['facts'] ?? [],
-            $this->store->knowledgeFacts()
-        )));
-
-        // Barcha bosqichlarga beriladigan umumiy kontekst
+        // Barcha bosqichlarga beriladigan umumiy kontekst: marketing bo'limining umumiy bilimi
         $context = [
             'brief' => Brief::forPrompt($brief, $this->tones),
-            'brand' => $brandWithKnowledge,
+            'brand' => Marketing::brand($this->brand, $this->store),
+            'products' => Marketing::productsForPrompt($brief['tourism_type']),
             'tone_profile' => $tone,
+            'house_style_examples' => $this->store->houseExamples($brief['tourism_type']),
         ];
+        $format = $options['format'] ?? null;
+        if ($format !== null) {
+            $context['deliverable'] = [
+                'format' => $format,
+                'format_description' => Marketing::settings()['formats'][$format] ?? $format,
+            ];
+        }
 
         $say('1/3 Strategiya: auditoriya va burchaklar tahlil qilinmoqda...');
         $strategy = $this->ask($briefId, 'strategy', $context, 0.7, true);
@@ -142,6 +145,7 @@ final class Copywriter
         return [
             'id' => (string) ($v['id'] ?? ''),
             'kind' => ($v['kind'] ?? '') === 'ad' ? 'ad' : 'social_post',
+            'format' => (string) ($v['format'] ?? ''),
             'angle' => (string) ($v['angle'] ?? ''),
             'framework' => (string) ($v['framework'] ?? ''),
             'hook' => trim((string) ($v['hook'] ?? '')),
@@ -151,6 +155,7 @@ final class Copywriter
             'headline' => trim((string) ($v['headline'] ?? '')),
             'description' => trim((string) ($v['description'] ?? '')),
             'cta_button' => (string) ($v['cta_button'] ?? ''),
+            'visual' => trim((string) ($v['visual'] ?? '')),
             'scores' => $scores,
             // O'rtacha ballni o'zimiz hisoblaymiz — AI arifmetikasiga ishonmaymiz
             'score' => $scores ? round(array_sum($scores) / count($scores), 1) : 0.0,
@@ -210,6 +215,19 @@ final class Copywriter
         return array_keys($found);
     }
 
+    /** Bitta variantning e'lon qilishga tayyor matni (+ vizual/ssenariy bo'lsa). */
+    public static function variantText(array $v): string
+    {
+        $out = "{$v['hook']}\n\n{$v['body']}\n\n{$v['cta']}\n";
+        if ($v['hashtags']) {
+            $out .= "\n" . implode(' ', $v['hashtags']) . "\n";
+        }
+        if (($v['visual'] ?? '') !== '') {
+            $out .= "\n--- Vizual / ssenariy ---\n{$v['visual']}\n";
+        }
+        return $out;
+    }
+
     /** Natijani o'qish uchun qulay matnga aylantiradi (terminal va .txt fayl uchun). */
     public static function toText(array $result): string
     {
@@ -233,10 +251,7 @@ final class Copywriter
             if ($v['kind'] === 'ad') {
                 $out .= "Sarlavha: {$v['headline']}\nTavsif: {$v['description']}\nTugma: {$v['cta_button']}\n\nAsosiy matn:\n";
             }
-            $out .= "{$v['hook']}\n\n{$v['body']}\n\n{$v['cta']}\n";
-            if ($v['hashtags']) {
-                $out .= "\n" . implode(' ', $v['hashtags']) . "\n";
-            }
+            $out .= self::variantText($v);
             foreach ($v['warnings'] ?? [] as $w) {
                 $out .= "⚠ $w\n";
             }

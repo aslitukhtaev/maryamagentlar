@@ -20,6 +20,8 @@ spl_autoload_register(function (string $class): void {
 });
 
 Maryam\Env::load(ROOT . '/.env');
+// Haftalik reja va fayl sanalari O'zbekiston vaqti bo'yicha bo'lsin
+date_default_timezone_set(Maryam\Env::get('TIMEZONE', 'Asia/Tashkent'));
 
 /** Barcha agentlar uchun umumiy "qutilar": AI mijoz, baza, brend va ton sozlamalari. */
 function app(): array

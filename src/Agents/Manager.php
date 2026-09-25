@@ -6,6 +6,7 @@ namespace Maryam\Agents;
 
 use InvalidArgumentException;
 use Maryam\Brief;
+use Maryam\Marketing;
 use Maryam\Store;
 
 /**
@@ -16,6 +17,7 @@ use Maryam\Store;
  *   - "chat"           — oddiy javob yoki yetishmagan ma'lumotni so'rash
  *   - "save_knowledge" — kompaniya haqidagi yangi faktni bilimlar bazasiga saqlash
  *   - "run_copywriter" — brif to'liq bo'lsa, Copywriter agentini chaqirish
+ *   - "run_plan"       — haftalik kontent-reja + tayyor matnlar (Kontent-strateg)
  *
  * Suhbat holati (to'plangan qisman brif, xabarlar tarixi) bazada saqlanadi —
  * shuning uchun foydalanuvchi bir necha xabarda bosqichma-bosqich ma'lumot bersa ham
@@ -39,7 +41,7 @@ final class Manager
      * shuning uchun foydalanuvchi "jim qolib ketdi" deb o'ylamasin, avval tezkor
      * javob boradi, keyin bot alohida runCopywriter()ni chaqiradi).
      *
-     * @return array{action: string, reply: string, ask_field: string, brief: ?array}
+     * @return array{action: string, reply: string, ask_field: string, brief: ?array, plan_wishes: string}
      */
     public function decide(string $chatId, string $userText): array
     {
@@ -50,6 +52,10 @@ final class Manager
             'partial_brief' => $partialBrief,
             'history' => $this->store->recentChatMessages($chatId, 12),
             'company_facts_count' => count($this->store->knowledgeFacts()),
+            'products' => array_map(
+                static fn (array $p) => ($p['name'] ?? $p['id'] ?? '') . ' [' . ($p['type'] ?? '') . ']',
+                Marketing::products()
+            ),
             'tourism_types' => array_keys($this->tones),
             'goals' => array_keys(Brief::GOALS),
             'languages' => array_keys(Brief::LANGUAGES),
@@ -97,7 +103,13 @@ final class Manager
 
         $this->store->addChatMessage($chatId, 'bot', $reply);
 
-        return ['action' => $action, 'reply' => $reply, 'ask_field' => $askField, 'brief' => $briefReady];
+        return [
+            'action' => $action,
+            'reply' => $reply,
+            'ask_field' => $askField,
+            'brief' => $briefReady,
+            'plan_wishes' => trim((string) ($data['plan_wishes'] ?? '')),
+        ];
     }
 
     /** SEKIN bosqich — decide()'dan "run_copywriter" chiqsa, shu alohida chaqiriladi. */
