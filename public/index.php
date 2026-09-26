@@ -44,7 +44,9 @@ $password = Env::get('WEB_PASSWORD', '');
 if (empty($_SESSION['auth']) && $password !== '') {
     if (hash_equals($password, (string) ($_SERVER['PHP_AUTH_PW'] ?? ''))) {
         $_SESSION['auth'] = 'password';
-    } elseif (isset($_GET['tg'])) {
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['login']) && !isset($_SERVER['PHP_AUTH_PW'])) {
+        // Avval Telegram imzosi bilan kirishga urinamiz (Mini App); Telegram tashqarisida sahifa ?login=1 ga o'tadi
+        session_destroy();
         require ROOT . '/web/tg-login.php';
         exit;
     } else {

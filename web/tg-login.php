@@ -16,8 +16,11 @@
 <script>
   const tg = window.Telegram && window.Telegram.WebApp;
   const box = document.getElementById('box');
+  const params = new URLSearchParams(location.search);
   if (!tg || !tg.initData) {
-    box.innerHTML = '<div class="err">Bu sahifani Telegram bot ichidagi <b>Ilova</b> tugmasi orqali oching.</div>';
+    // Oddiy brauzer — parol bilan kirish
+    params.set('login', '1');
+    location.replace('?' + params.toString());
   } else {
     tg.ready(); tg.expand();
     fetch('?tglogin=1', {
@@ -26,7 +29,7 @@
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'init_data=' + encodeURIComponent(tg.initData)
     }).then(r => {
-      if (r.ok) { location.replace('?tg=1&p=home'); return; }
+      if (r.ok) { params.delete('login'); params.set('tg', '1'); location.replace('?' + params.toString()); return; }
       const id = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : '?';
       box.innerHTML = '<div class="err">Kirish rad etildi — ilova faqat Maryam Travel jamoasi uchun.<br><br>Sizning Telegram ID: <b>' + id + '</b><br>Administrator uni .env faylidagi TELEGRAM_ALLOWED_CHAT_IDS ga qo\'shsin.</div>';
     }).catch(() => { box.innerHTML = '<div class="err">Internet bilan aloqa yo\'q. Qayta oching.</div>'; });

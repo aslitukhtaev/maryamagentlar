@@ -34,13 +34,22 @@ final class BotUi
         return [
             'keyboard' => [
                 [['text' => self::BTN_POST], ['text' => self::BTN_PLAN]],
-                [['text' => self::BTN_RECENT], $app !== '' ? ['text' => self::BTN_APP, 'web_app' => ['url' => $app]] : ['text' => self::BTN_HELP]],
+                // Klaviatura tugmasi Mini App'ga imzo (initData) bermaydi — shuning uchun oddiy tugma,
+                // bosilganda xabar ichidagi "Ochish" (web_app) tugmasi yuboriladi
+                [['text' => self::BTN_RECENT], ['text' => $app !== '' ? self::BTN_APP : self::BTN_HELP]],
                 ...($app !== '' ? [[['text' => self::BTN_HELP]]] : []),
             ],
             'resize_keyboard' => true,
             'is_persistent' => true,
             'input_field_placeholder' => 'Menyudan tanlang yoki vazifani yozing',
         ];
+    }
+
+    /** Mini App'ni ochadigan xabar-ichi tugma (imzo bilan ochiladi). */
+    public static function webAppButton(string $text = "📱 O'qitish markazini ochish"): ?array
+    {
+        $app = self::webAppUrl();
+        return $app !== '' ? ['inline_keyboard' => [[['text' => $text, 'web_app' => ['url' => $app]]]]] : null;
     }
 
     public static function inline(array $rows): array

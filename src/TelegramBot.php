@@ -191,8 +191,13 @@ final class TelegramBot
             case BotUi::BTN_RECENT:
                 $this->recent($tg);
                 return;
-            case BotUi::BTN_HELP:
             case BotUi::BTN_APP:
+                $button = BotUi::webAppButton();
+                $button
+                    ? $tg->message("O'qitish markazi: shablonlar, qoidalar, katalog, namunalar va barcha natijalar.", $button)
+                    : $tg->message("Ilova manzili sozlanmagan (.env: WEBAPP_URL).", BotUi::mainKeyboard());
+                return;
+            case BotUi::BTN_HELP:
                 $tg->message(BotUi::helpText(), BotUi::mainKeyboard());
                 return;
         }
