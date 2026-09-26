@@ -4,7 +4,7 @@ declare(strict_types=1);
 $return = url(['p' => 'bilimlar']);
 $categories = ['umumiy' => 'Umumiy', 'ishonch' => 'Ishonch (tajriba, mijozlar, litsenziya)', 'xizmat' => 'Xizmatlar', 'afzallik' => 'Raqobatchilardan farqimiz', 'aloqa' => 'Aloqa', 'faq' => "Ko'p so'raladigan savollar"];
 ?>
-<h1>Bilimlar</h1>
+<h2 class="sub">Kompaniya faktlari</h2>
 <p class="lead">Kompaniya haqidagi faktlar — barcha agentlar biladi va matnlarda ishonch uchun ishlatadi. Telegram botga aytilgan faktlar ham shu
   yerga tushadi. Faqat haqiqiy va tekshirilgan narsalarni yozing.</p>
 

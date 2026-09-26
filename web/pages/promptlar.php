@@ -6,7 +6,7 @@ use Maryam\Prompts;
 $name = isset(Prompts::ALL[$_GET['name'] ?? '']) ? $_GET['name'] : null;
 ?>
 <?php if (!$name): ?>
-  <h1>Promptlar</h1>
+  <h2 class="sub">Kengaytirilgan: agent yo'riqnomalari</h2>
   <p class="lead">Prompt — agentning asosiy yo'riqnomasi (u kim, qanday fikrlaydi, nima qaytaradi). Odatda qoidalar va shablonlar yetarli;
     promptni agentning ishlash uslubini tubdan o'zgartirmoqchi bo'lsangiz tahrirlang. Har saqlash yangi versiya — xohlagan payt qaytasiz.</p>
   <div class="card">
@@ -20,7 +20,7 @@ $name = isset(Prompts::ALL[$_GET['name'] ?? '']) ? $_GET['name'] : null;
 
 <?php else: $versions = $store->promptVersions($name); ?>
   <p class="small"><a href="<?= e(url(['p' => 'promptlar'])) ?>">← Promptlar</a></p>
-  <h1><?= e(Prompts::ALL[$name]) ?></h1>
+  <h2 class="sub"><?= e(Prompts::ALL[$name]) ?></h2>
   <p class="lead">Javob formati (JSON) qismini o'zgartirmang — kod aynan shu maydonlarni kutadi. Qoidalar, shablon va faktlar promptga
     avtomatik qo'shiladi, ularni bu yerga yozish shart emas.</p>
   <form method="post" class="card"><?= csrf_field() ?>

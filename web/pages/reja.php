@@ -9,9 +9,7 @@ $plan = $store->plan($week);
 $events = Marketing::upcomingEvents(new DateTimeImmutable('today'), 30);
 $here = url(['p' => 'reja', 'week' => $week]);
 ?>
-<h1>Haftalik reja</h1>
-<p class="lead">Kontent-strateg katalog, mavsum, shablonlar va qoidalarga qarab haftalik reja tuzadi, copywriter har band uchun tayyor
-  material yozadi. Bot ishlab tursa, har dushanba o'zi Telegram'ga yuboradi.</p>
+<?php page_header('🗓', 'Kontent-strateg', "Mavsum, turlar va shablonlarga qarab haftalik reja tuzadi; har kun uchun tayyor material yoziladi. Har dushanba o'zi Telegram'ga yuboradi."); ?>
 
 <form method="post" class="card" <?= busy_attr() ?>>
   <?= csrf_field() ?><input type="hidden" name="action" value="plan">

@@ -17,7 +17,7 @@ final class BotUi
     public const BTN_POST = '✍️ Post yozish';
     public const BTN_PLAN = '🗓 Haftalik reja';
     public const BTN_RECENT = '📂 Oxirgi ishlar';
-    public const BTN_APP = "📱 O'qitish markazi";
+    public const BTN_APP = "📱 Ilovani ochish";
     public const BTN_HELP = '❓ Yordam';
 
     private const FORMAT_LABELS = ['post' => 'POST', 'reels' => 'REELS', 'karusel' => 'KARUSEL', 'reklama' => 'REKLAMA'];
@@ -46,7 +46,7 @@ final class BotUi
     }
 
     /** Mini App'ni ochadigan xabar-ichi tugma (imzo bilan ochiladi). */
-    public static function webAppButton(string $text = "📱 O'qitish markazini ochish"): ?array
+    public static function webAppButton(string $text = "📱 Ilovani ochish"): ?array
     {
         $app = self::webAppUrl();
         return $app !== '' ? ['inline_keyboard' => [[['text' => $text, 'web_app' => ['url' => $app]]]]] : null;
@@ -94,7 +94,7 @@ final class BotUi
         $note = '';
         if (!empty($result['placeholders'])) {
             $note = "\n✏ Qo'lda to'ldiring: " . implode(', ', $result['placeholders'])
-                  . "\n(Katalog/Bilimlarga kiritsangiz, keyingi safar o'zi yozadi.)";
+                  . "\n(Ilovadagi Kompaniya bo'limiga kiritsangiz, keyingi safar o'zi yozadi.)";
         }
         if (count($result['hooks'] ?? []) > 1) {
             $note .= "\n\n💡 Boshqa birinchi qatorlar:\n— " . implode("\n— ", array_slice($result['hooks'], 0, 5));
@@ -115,7 +115,7 @@ final class BotUi
                 $tg->message(self::variantMessage($item['content'], $title), self::variantKeyboard((int) $item['content']['db_id']));
             }
         }
-        $tg->message("✅ Haftalik reja tayyor ({$plan['week']}). Baholang yoki O'qitish markazida ko'ring.", self::inline([
+        $tg->message("✅ Haftalik reja tayyor ({$plan['week']}). Baholang yoki ilovada ko'ring.", self::inline([
             [['🔁 Qayta tuzish', 'plan:go'], ['🏠 Menyu', 'menu']],
         ]));
     }

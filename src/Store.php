@@ -322,6 +322,23 @@ final class Store
         return $st->fetchAll();
     }
 
+    /** Dizayner chiqargan oxirgi tayyor rasmlar (galereya uchun). */
+    public function recentDesigns(int $limit = 12): array
+    {
+        $st = $this->db->prepare("SELECT r.brief_id, r.kind, r.data, b.topic FROM agent_results r JOIN briefs b ON b.id = r.brief_id
+                                  WHERE r.agent = 'designer' AND r.kind LIKE 'variant_%' ORDER BY r.id DESC LIMIT ?");
+        $st->bindValue(1, $limit, PDO::PARAM_INT);
+        $st->execute();
+        $out = [];
+        foreach ($st->fetchAll() as $r) {
+            $d = json_decode($r['data'], true);
+            if (!empty($d['card_path']) && is_file($d['card_path'])) {
+                $out[] = ['brief_id' => (int) $r['brief_id'], 'variant_id' => (int) substr($r['kind'], 8), 'topic' => $r['topic']];
+            }
+        }
+        return $out;
+    }
+
     /** Bosh sahifa uchun raqamlar. */
     public function stats(): array
     {

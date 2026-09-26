@@ -58,7 +58,7 @@ final class TelegramBot
             // Manzil sozlanmagan bo'lsa — BotFather'da qo'lda qo'yilgan tugmaga tegmaymiz
             $app = BotUi::webAppUrl();
             if ($app !== '') {
-                $tg->api('setChatMenuButton', ['menu_button' => ['type' => 'web_app', 'text' => "O'qitish", 'web_app' => ['url' => $app]]]);
+                $tg->api('setChatMenuButton', ['menu_button' => ['type' => 'web_app', 'text' => 'Ilova', 'web_app' => ['url' => $app]]]);
             }
         } catch (Throwable $e) {
             echo "⚠ Menyu sozlanmadi: {$e->getMessage()}\n";
@@ -195,7 +195,7 @@ final class TelegramBot
             case BotUi::BTN_APP:
                 $button = BotUi::webAppButton();
                 $button
-                    ? $tg->message("O'qitish markazi: shablonlar, qoidalar, katalog, namunalar va barcha natijalar.", $button)
+                    ? $tg->message("Ilova: Copywriter, Kontent-strateg, Dizayner, O'qitish studiyasi va Kompaniya ma'lumotlari.", $button)
                     : $tg->message("Ilova manzili sozlanmagan (.env: WEBAPP_URL).", BotUi::mainKeyboard());
                 return;
             case BotUi::BTN_HELP:

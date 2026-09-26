@@ -23,9 +23,14 @@ $back = static function (string $fallback): string {
 switch ($action) {
     // ---------- Studiya ----------
     case 'run':
-        $brief = Brief::normalize($_POST, $tones);
-        $brief['id'] = $store->saveBrief($brief);
+        // "Avtomatik": yo'nalish va maqsad shablondan (yo'q bo'lsa — xorijga turlar, lid)
         $templateId = (int) ($_POST['template_id'] ?? 0);
+        $tpl = $templateId ? $store->row('templates', $templateId) : null;
+        $input = $_POST;
+        $input['tourism_type'] = ($input['tourism_type'] ?? '') ?: (($tpl['tourism_type'] ?? '') ?: 'outbound');
+        $input['goal'] = ($input['goal'] ?? '') ?: (['qamrov' => 'jalb', 'ishonch' => 'brend', 'sotuv' => 'lid'][$tpl['stage'] ?? ''] ?? 'lid');
+        $brief = Brief::normalize($input, $tones);
+        $brief['id'] = $store->saveBrief($brief);
         $result = (new Copywriter($ai, $store, $brand, $tones))->run($brief, $templateId ? ['template_id' => $templateId] : []);
         Output::save($brief, 'copywriter.txt', Copywriter::toText($result));
         redirect(url(['p' => 'studio', 'brief' => $brief['id']]));

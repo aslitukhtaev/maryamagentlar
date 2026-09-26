@@ -4,9 +4,9 @@ declare(strict_types=1);
 $examples = $store->rows('house_examples');
 $return = url(['p' => 'namunalar']);
 ?>
-<h1>Oltin namunalar</h1>
+<h2 class="sub">Oltin namunalar</h2>
 <p class="lead">Kompaniyangizning eng yaxshi postlari. Copywriter ularning ohangi, uzunligi va uslubini o'zlashtiradi (faktlarini emas).
-  Qo'shish yo'llari: shu yerga joylash, Studiyada "Oltin namuna qilish" tugmasi yoki Telegram botga kanal postini forward qilish.</p>
+  Qo'shish yo'llari: shu yerga joylash, Copywriter natijasidagi "Oltin namuna qilish" tugmasi yoki Telegram botga kanal postini forward qilish.</p>
 
 <form method="post" class="card"><?= csrf_field() ?>
   <input type="hidden" name="action" value="save"><input type="hidden" name="table" value="house_examples"><input type="hidden" name="return" value="<?= e($return) ?>">

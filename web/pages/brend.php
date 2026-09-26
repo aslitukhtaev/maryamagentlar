@@ -10,9 +10,23 @@ $dir = ROOT . PostRenderer::BRAND_DIR;
 $logos = ['logo-white' => ['Oq logo', 'Rasmlardagi yashil lentada shu turadi'], 'logo' => ['Rangli logo', 'Och fonlar uchun']];
 $v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("$dir/logo-white.png") . json_encode($colors)), 0, 8);
 ?>
-<h1>Brend va grid</h1>
-<p class="lead">Logongizni va dizayn namunalaringizni shu yerga yuklang. Dizayner agent namunalarga qarab uslubni moslaydi,
-  logoni esa har bir tayyor rasmga o'zi qo'yadi.</p>
+<?php page_header('🎨', 'Dizayner', "Har bir postga brend uslubida tayyor rasm chizadi. Logo va dizayn namunalaringizni yuklang — rasmlar sizning uslubingizda chiqadi."); ?>
+
+<?php $designs = $store->recentDesigns(); if ($designs): ?>
+<h2>Oxirgi tayyor rasmlar</h2>
+<div class="card" style="padding:10px">
+  <div class="ig-grid wide">
+    <?php foreach ($designs as $d): ?>
+      <a href="<?= e(url(['img' => $d['brief_id'], 'v' => $d['variant_id'], 'card' => 1])) ?>" download="post-<?= $d['variant_id'] ?>.png" title="<?= e($d['topic']) ?> — yuklab olish">
+        <img src="<?= e(url(['img' => $d['brief_id'], 'v' => $d['variant_id'], 'card' => 1])) ?>" alt="<?= e($d['topic']) ?>" loading="lazy">
+        <span><?= e($d['topic']) ?></span>
+      </a>
+    <?php endforeach; ?>
+  </div>
+</div>
+<?php else: ?>
+<div class="card small muted">Hali tayyor rasm yo'q. Copywriter natijasi ostidagi <b>"Dizayn tayyorlash"</b> tugmasini bosing (yoki botda 🎨 Dizayn) — rasm shu yerda paydo bo'ladi.</div>
+<?php endif; ?>
 
 <div class="grid2">
   <div class="card">
@@ -63,7 +77,7 @@ $v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("
   </div>
 </div>
 
-<h2>Tayyor rasm tizimi — grid ko'rinishi</h2>
+<h2>Sahifangiz qanday ko'rinadi</h2>
 <?php if (!function_exists('imagecreatetruecolor')): ?>
   <div class="flash error">Serverda rasm chizish moduli (php-gd) o'rnatilmagan. Serverda o'rnatish buyrug'ini bir marta qayta
     ishga tushiring (SERVER_UZ.md) — keyin grid va tayyor rasmlar ishlaydi.</div>
@@ -81,9 +95,9 @@ $v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("
   </div>
 </div>
 
-<form method="post" class="card"><?= csrf_field() ?>
+<details class="card more-card"><summary><b>Ranglar</b> <span class="muted small">— logotipingiz ranglariga moslash</span></summary>
+<form method="post"><?= csrf_field() ?>
   <input type="hidden" name="action" value="brand_colors">
-  <h3>Ranglar</h3>
   <p class="small muted">Logotipdagi ranglar. O'zgartirsangiz, grid va barcha yangi rasmlar darhol yangilanadi.</p>
   <div class="row">
   <?php foreach (['primary' => 'Asosiy (fon, lenta)', 'accent' => 'Urg\'u (narx, belgilar)', 'dark' => "To'q (gradient)"] as $k => $label): ?>
@@ -92,9 +106,9 @@ $v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("
   </div>
   <div class="actions"><button type="submit">Saqlash</button></div>
 </form>
+</details>
 
-<h2>Dizayner uchun qo'llanma</h2>
-<div class="card small">
+<details class="card more-card small"><summary><b>Dizayneringiz uchun qo'llanma</b> <span class="muted">— o'lcham, shrift, ranglar, qoidalar</span></summary>
   <table>
     <tr><td><b>O'lcham</b></td><td>Post va karusel: 1080×1350 (4:5). Reels/Stories muqovasi: 1080×1920. Chetdan bo'sh joy: 72 px.</td></tr>
     <tr><td><b>Shrift</b></td><td>Montserrat — sarlavha ExtraBold, matn SemiBold/Medium (Google Fonts, bepul). Boshqa shrift ishlatilmaydi.</td></tr>
@@ -107,4 +121,4 @@ $v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("
     <tr><td><b>Foto</b></td><td>Manzilning yorqin, haqiqiy fotosi; tepasi va pastki qismi qoraytiriladi (matn o'qilishi uchun). Odamlar yuzi yaqindan emas.</td></tr>
   </table>
   <p class="muted" style="margin-bottom:0">Shrift fayllari: <code>resources/fonts/</code> (SIL Open Font License).</p>
-</div>
+</details>

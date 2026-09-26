@@ -19,7 +19,7 @@ $item = $edit ?? array_fill_keys([...array_keys($fields), 'selling_points'], '')
 $return = url(['p' => 'katalog']);
 $fileCount = count(array_filter(Marketing::products(), static fn ($p) => !str_starts_with((string) ($p['id'] ?? ''), 'p')));
 ?>
-<h1>Katalog</h1>
+<h2 class="sub">Sotuvdagi turlar</h2>
 <p class="lead">Sotuvdagi turlar. Agentlar narx, sana, mehmonxona va aksiyani shu yerdan oladi — sizdan so'ramaydi va matnda [NARX]
   qoldirmaydi. Faqat haqiqiy ma'lumot yozing; bilmagan maydonni bo'sh qoldiring. Sotuvdan chiqqan turni "faol emas" qiling.</p>
 

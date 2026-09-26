@@ -7,12 +7,20 @@ $stats = $store->stats();
 $flash = flash();
 $old = $_SESSION['old'] ?? [];
 unset($_SESSION['old']);
-$nav = [
-    'Ish' => ['home', 'studio', 'reja'],
-    "O'qitish" => ['shablonlar', 'qoidalar', 'namunalar'],
-    'Bilim' => ['brend', 'katalog', 'bilimlar'],
-    'Kengaytirilgan' => ['promptlar'],
+// 5 ta bo'lim: 3 ta agent + o'qitish + kompaniya. Bo'lim ichidagi sahifalar — tablar.
+$sections = [
+    'studio' => ['✍️', 'Copywriter', 'Post va reklama yozadi', 'Copywriter', ['studio' => 'Yozdirish']],
+    'reja' => ['🗓', 'Kontent-strateg', 'Haftalik reja tuzadi', 'Reja', ['reja' => 'Haftalik reja']],
+    'brend' => ['🎨', 'Dizayner', 'Logo, uslub, tayyor rasmlar', 'Dizayner', ['brend' => 'Dizayner']],
+    'oqitish' => ['🎓', "O'qitish studiyasi", "Agentlarni o'rgatish", "O'qitish", ['oqitish' => 'Umumiy', 'shablonlar' => 'Shablonlar', 'qoidalar' => 'Qoidalar', 'namunalar' => 'Namunalar', 'promptlar' => 'Kengaytirilgan']],
+    'kompaniya' => ['🏢', 'Kompaniya', 'Turlar va faktlar', 'Kompaniya', ['katalog' => 'Turlar', 'bilimlar' => 'Faktlar']],
 ];
+$currentSection = 'studio';
+foreach ($sections as $key => $sec) {
+    if (isset($sec[4][$page])) {
+        $currentSection = $key;
+    }
+}
 ?>
 <!doctype html>
 <html lang="uz">
@@ -32,10 +40,19 @@ $nav = [
   aside { background:var(--brand-2); color:#dfe9e5; padding:18px 14px; position:sticky; top:0; height:100vh; overflow:auto; }
   .logo { font-weight:800; letter-spacing:.5px; color:#fff; margin:2px 8px 18px; }
   .logo small { display:block; font-weight:500; color:var(--gold); letter-spacing:0; font-size:12px; }
-  .nav-group { font-size:11px; text-transform:uppercase; letter-spacing:1px; color:#8fb3a8; margin:16px 8px 6px; }
-  aside a { display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border-radius:7px; color:#e6efec; text-decoration:none; }
-  aside a:hover { background:rgba(255,255,255,.07); }
-  aside a.on { background:#fff; color:var(--brand-2); font-weight:600; }
+  .sections a { display:flex; gap:12px; align-items:center; padding:11px 12px; border-radius:10px; color:#e6efec; text-decoration:none; margin-bottom:4px; }
+  .sections a:hover { background:rgba(255,255,255,.07); }
+  .sections a.on { background:#fff; color:var(--brand-2); }
+  .sections .ic { font-size:22px; width:28px; text-align:center; }
+  .sections .tx { display:flex; flex-direction:column; line-height:1.25; flex:1; }
+  .sections .tx b { font-size:15px; }
+  .sections .tx small { font-size:12px; opacity:.7; }
+  .sections .tx em { display:none; }
+  .sections .pill { margin-left:auto; }
+  .tabs { display:flex; gap:6px; margin:-6px 0 20px; overflow-x:auto; scrollbar-width:none; border-bottom:1px solid var(--line); }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tabs a { padding:9px 14px; color:var(--muted); text-decoration:none; border-bottom:3px solid transparent; white-space:nowrap; font-weight:600; font-size:14px; }
+  .tabs a.on { color:var(--brand); border-bottom-color:var(--gold); }
   .pill { background:var(--gold); color:#1b1f1d; border-radius:99px; font-size:11px; padding:1px 7px; font-weight:700; }
   main { padding:26px 30px 60px; max-width:1060px; width:100%; }
   h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:17px; margin:26px 0 10px; } h3 { font-size:15px; margin:0 0 6px; }
@@ -80,7 +97,30 @@ $nav = [
   .steps li { margin:6px 0; }
   .done { color:var(--muted); text-decoration:line-through; }
   .busy { margin-left:6px; }
+  .page-head { display:flex; gap:14px; align-items:center; margin-bottom:18px; }
+  .page-ic { font-size:34px; width:58px; height:58px; display:grid; place-items:center; background:var(--card); border:1px solid var(--line); border-radius:16px; flex:none; }
+  .page-head h1 { margin:0; } .page-head p { margin:2px 0 0; color:var(--muted); }
+  .big-input { font-size:17px; padding:13px 14px; }
+  .choice-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:8px; }
+  .choice { margin:0; font-weight:400; cursor:pointer; position:relative; }
+  .choice input { position:absolute; top:0; left:0; width:1px; height:1px; opacity:0; pointer-events:none; }
+  .choice span { display:block; height:100%; border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; background:#fff; }
+  .choice b { display:block; font-size:14px; } .choice small { color:var(--muted); font-size:12px; }
+  .choice input:checked + span { border-color:var(--brand); background:var(--soft); box-shadow:0 0 0 1px var(--brand) inset; }
+  .choice input:focus-visible + span { outline:2px solid var(--gold); }
+  details.more { margin-top:14px; } details.more summary { color:var(--brand); font-weight:600; font-size:14px; }
+  .primary-btn { padding:12px 26px; font-size:16px; }
+  .list { padding:6px 0; }
+  .list-row { display:flex; flex-direction:column; padding:10px 18px; text-decoration:none; color:var(--ink); border-bottom:1px solid var(--line); }
+  .list-row:last-child { border-bottom:0; } .list-row:hover { background:#faf9f5; }
   .ig-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; max-width:620px; margin:0 auto; }
+  .ig-grid.wide { max-width:none; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); }
+  details.more-card > summary { cursor:pointer; list-style:none; }
+  details.more-card > summary::-webkit-details-marker { display:none; }
+  details.more-card > summary::before { content:'▸ '; color:var(--brand); }
+  details.more-card[open] > summary::before { content:'▾ '; }
+  details.more-card[open] > summary { margin-bottom:12px; }
+  h2.sub { margin-top:4px; }
   .ig-grid a { position:relative; display:block; aspect-ratio:4/5; overflow:hidden; background:#ddd; }
   .ig-grid img { width:100%; height:100%; object-fit:cover; display:block; }
   .ig-grid span { position:absolute; left:0; right:0; bottom:0; background:rgba(0,0,0,.55); color:#fff; font-size:11px; padding:3px 6px; opacity:0; transition:opacity .15s; }
@@ -101,12 +141,23 @@ $nav = [
   .color-row input { width:48px; height:36px; padding:2px; }
   .swatch { display:inline-block; width:18px; height:18px; border-radius:4px; vertical-align:middle; border:1px solid var(--line); margin-right:4px; }
   @media (max-width: 820px) {
-    .wrap { grid-template-columns:1fr; background:none; }
-    aside { position:sticky; top:0; z-index:5; height:auto; display:flex; flex-wrap:nowrap; overflow-x:auto; gap:4px; padding:8px 10px; scrollbar-width:none; }
-    aside::-webkit-scrollbar { display:none; }
-    .logo, .nav-group { display:none; }
-    aside a { padding:7px 11px; font-size:14px; white-space:nowrap; flex:none; }
-    main { padding:18px 16px 50px; } .grid2 { grid-template-columns:1fr; }
+    .wrap { grid-template-columns:minmax(0, 1fr); background:none; }
+    /* Telefon: pastki panelda 5 ta bo'lim */
+    aside { position:fixed; bottom:0; left:0; right:0; top:auto; z-index:20; height:auto; padding:4px 4px calc(4px + env(safe-area-inset-bottom)); }
+    .logo { display:none; }
+    .sections { display:flex; }
+    .sections a { flex:1; flex-direction:column; gap:1px; padding:6px 2px; margin:0; border-radius:8px; }
+    .sections .ic { font-size:20px; width:auto; }
+    .sections .tx { align-items:center; }
+    .sections .tx b, .sections .tx small { display:none; }
+    .sections .tx em { display:block; font-style:normal; font-size:11px; font-weight:600; white-space:nowrap; }
+    .sections .pill { position:absolute; margin:0 0 0 28px; font-size:10px; }
+    .sections a { position:relative; }
+    table { display:block; overflow-x:auto; }
+    .choice-grid { grid-template-columns:1fr 1fr; gap:6px; }
+    .choice span { padding:8px 9px; } .choice b { font-size:13px; } .choice small { font-size:11px; }
+    .page-ic { width:46px; height:46px; font-size:26px; border-radius:12px; }
+    main { padding:16px 16px 96px; } .grid2 { grid-template-columns:1fr; }
   }
 </style>
 <?php if (!empty($_SESSION['tg'])): ?>
@@ -133,17 +184,29 @@ $nav = [
 <div class="wrap">
 <aside>
   <div class="logo">MARYAM TRAVEL<small>Marketing bo'limi<?= $ai instanceof Maryam\GeminiMock ? ' · sinov rejimi' : '' ?></small></div>
-  <?php foreach ($nav as $group => $pages): ?>
-    <div class="nav-group"><?= e($group) ?></div>
-    <?php foreach ($pages as $p): ?>
-      <a href="<?= e(url(['p' => $p])) ?>" class="<?= $p === $page ? 'on' : '' ?>"><?= e(PAGES[$p]) ?>
-        <?php if ($p === 'qoidalar' && $stats['proposed']): ?><span class="pill"><?= $stats['proposed'] ?></span><?php endif; ?>
-      </a>
-    <?php endforeach; ?>
+  <nav class="sections">
+  <?php foreach ($sections as $key => [$icon, $label, $desc, $short, $pages]): ?>
+    <a href="<?= e(url(['p' => array_key_first($pages)])) ?>" class="<?= $key === $currentSection ? 'on' : '' ?>">
+      <span class="ic"><?= $icon ?></span>
+      <span class="tx"><b><?= e($label) ?></b><em><?= e($short) ?></em><small><?= e($desc) ?></small></span>
+      <?php if ($key === 'oqitish' && $stats['proposed']): ?><span class="pill"><?= $stats['proposed'] ?></span><?php endif; ?>
+    </a>
   <?php endforeach; ?>
+  </nav>
 </aside>
 <main>
   <?php if ($flash): ?><div class="flash <?= e($flash[0]) ?>"><?= e($flash[1]) ?></div><?php endif; ?>
+  <?php if (count($sections[$currentSection][4]) > 1): [$sIc, $sLabel, $sDesc] = $sections[$currentSection]; ?>
+    <?php page_header($sIc, $sLabel, $currentSection === 'oqitish'
+        ? "Agentlar siz o'rgatgan narsa bilan ishlaydi: shablon, qoida va namunalar. Har bahoyingiz ularni kuchaytiradi."
+        : "Agentlar narx, sana va faktlarni shu yerdan oladi — sizdan so'ramaydi."); ?>
+    <nav class="tabs">
+      <?php foreach ($sections[$currentSection][4] as $p => $label): ?>
+        <a href="<?= e(url(['p' => $p])) ?>" class="<?= $p === $page ? 'on' : '' ?>"><?= e($label) ?>
+          <?php if ($p === 'qoidalar' && $stats['proposed']): ?><span class="pill"><?= $stats['proposed'] ?></span><?php endif; ?></a>
+      <?php endforeach; ?>
+    </nav>
+  <?php endif; ?>
   <?php require ROOT . "/web/pages/$page.php"; ?>
 </main>
 </div>

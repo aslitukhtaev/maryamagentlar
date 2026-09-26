@@ -101,10 +101,10 @@ final class GraphicDesigner
         // Brend uslubidagi TAYYOR rasm: fon (generatsiya bo'lsa) + sarlavha, narx, lenta, logo
         $cardPath = null;
         $card = (array) ($data['card'] ?? []);
-        $layout = (string) ($card['layout'] ?? '');
-        if (isset(PostRenderer::LAYOUTS[$layout])) {
+        $cardLayout = (string) ($card['layout'] ?? '');
+        if (isset(PostRenderer::LAYOUTS[$cardLayout])) {
             try {
-                $png = PostRenderer::forBrand($this->brand)->render($layout, $card + ['bg' => $imagePath], PostRenderer::colors($this->store));
+                $png = PostRenderer::forBrand($this->brand)->render($cardLayout, $card + ['bg' => $imagePath], PostRenderer::colors($this->store));
                 $cardPath = Output::dir($brief) . "/post$suffix.png";
                 file_put_contents($cardPath, $png);
                 $say('Tayyor rasm chizildi.');
@@ -116,7 +116,7 @@ final class GraphicDesigner
         $result = [
             'brief_id' => $briefId,
             'card_path' => $cardPath,
-            'card_layout' => $cardPath ? $layout : '',
+            'card_layout' => $cardPath ? $cardLayout : '',
             'image_prompt' => $imagePrompt,
             'alt_text' => $altText,
             'layout' => $layout,

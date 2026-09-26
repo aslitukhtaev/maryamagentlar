@@ -21,7 +21,7 @@ $deleteForm = static function (array $r, string $label = "O'chirish") use ($retu
       <button class="danger"><?= e($label) ?></button></form><?php
 };
 ?>
-<h1>Qoidalar</h1>
+<h2 class="sub">Qoidalar</h2>
 <p class="lead">Qoida — agentga bergan qat'iy buyrug'ingiz ("har doim...", "hech qachon..."). Har bir yozishda va muharrir tekshiruvida
   ishlatiladi. O'qituvchi agent baholaringiz va izohlaringizdan yangi qoidalar taklif qiladi.</p>
 

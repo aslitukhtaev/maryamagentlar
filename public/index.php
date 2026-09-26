@@ -64,20 +64,20 @@ set_time_limit(1800); // haftalik reja bir necha daqiqa davom etadi
 ['ai' => $ai, 'store' => $store, 'brand' => $brand, 'tones' => $tones] = appVertex();
 
 const PAGES = [
-    'home' => 'Bosh sahifa',
-    'studio' => 'Studiya',
-    'reja' => 'Haftalik reja',
+    'studio' => 'Copywriter',
+    'reja' => 'Kontent-strateg',
+    'brend' => 'Dizayner',
+    'oqitish' => "O'qitish studiyasi",
     'shablonlar' => 'Shablonlar',
     'qoidalar' => 'Qoidalar',
-    'namunalar' => 'Oltin namunalar',
-    'promptlar' => 'Promptlar',
-    'brend' => 'Brend va grid',
-    'katalog' => 'Katalog',
-    'bilimlar' => 'Bilimlar',
+    'namunalar' => 'Namunalar',
+    'promptlar' => 'Kengaytirilgan',
+    'katalog' => 'Turlar',
+    'bilimlar' => 'Faktlar',
 ];
-$page = isset(PAGES[$_GET['p'] ?? '']) ? $_GET['p'] : 'home';
+$page = ($_GET['p'] ?? '') === 'home' ? 'oqitish' : (isset(PAGES[$_GET['p'] ?? '']) ? $_GET['p'] : 'studio');
 
-if ($page === 'home' && ($_GET['img'] ?? '') !== '') {
+if (($_GET['img'] ?? '') !== '') {
     // Dizayner yaratgan rasm (faqat output/ papkasidan)
     $design = $store->result((int) $_GET['img'], 'designer', isset($_GET['v']) ? 'variant_' . (int) $_GET['v'] : 'final');
     $path = $design[isset($_GET['card']) ? 'card_path' : 'image_path'] ?? null;

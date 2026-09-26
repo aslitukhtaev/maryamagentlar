@@ -41,6 +41,12 @@ function csrf_field(): string
     return '<input type="hidden" name="csrf" value="' . csrf_token() . '">';
 }
 
+/** Bo'lim sarlavhasi: ikonka + nom + bir gapli tushuntirish. */
+function page_header(string $icon, string $title, string $desc): void
+{
+    echo '<div class="page-head"><span class="page-ic">' . $icon . '</span><div><h1>' . e($title) . '</h1><p>' . e($desc) . '</p></div></div>';
+}
+
 function options(array $items, string $selected = ''): string
 {
     $out = '';

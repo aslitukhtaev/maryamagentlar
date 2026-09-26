@@ -11,7 +11,7 @@ $templates = $store->rows('templates');
 ?>
 <?php if ($edit): ?>
   <p class="small"><a href="<?= e(url(['p' => 'shablonlar'])) ?>">← Shablonlar</a></p>
-  <h1><?= $edit['id'] ? e($edit['name']) : 'Yangi shablon' ?></h1>
+  <h2 class="sub"><?= $edit['id'] ? e($edit['name']) : 'Yangi shablon' ?></h2>
   <p class="lead">Tuzilmada o'zgaruvchan joylarni <code>{KATTA_HARF}</code> bilan belgilang — agent ularni katalog va brif faktlari bilan
     to'ldiradi. <code>{HOOK — ko'rsatma}</code> ko'rinishida agentga nima yozishni aytish mumkin.</p>
   <form method="post" class="card">
@@ -33,7 +33,7 @@ $templates = $store->rows('templates');
     <textarea name="example"><?= e($edit['example']) ?></textarea>
     <label class="check"><input type="checkbox" name="active" <?= $edit['active'] ? 'checked' : '' ?>> Faol (agentlar ishlatadi)</label>
     <div class="actions"><button type="submit">Saqlash</button>
-      <?php if ($edit['id']): ?><a href="<?= e(url(['p' => 'studio', 'template' => $edit['id']])) ?>">Studiyada sinab ko'rish →</a><?php endif; ?></div>
+      <?php if ($edit['id']): ?><a href="<?= e(url(['p' => 'studio', 'template' => $edit['id']])) ?>">Copywriter'da sinab ko'rish →</a><?php endif; ?></div>
   </form>
   <?php if ($edit['id']): ?>
     <form method="post" onsubmit="return confirm('Shablon o\'chirilsinmi?')"><?= csrf_field() ?>
@@ -42,7 +42,7 @@ $templates = $store->rows('templates');
   <?php endif; ?>
 
 <?php else: ?>
-  <h1>Shablonlar</h1>
+  <h2 class="sub">Shablonlar</h2>
   <p class="lead">Shablon — sahifangizdagi har bir post turining doimiy tuzilmasi va dizayni. Agentlar ularga qat'iy amal qiladi,
     shuning uchun sahifa bir xil va professional ko'rinadi. Kontent-strateg har bandga mos shablonni o'zi tanlaydi.</p>
 
