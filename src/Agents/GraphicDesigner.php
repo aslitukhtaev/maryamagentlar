@@ -7,6 +7,7 @@ namespace Maryam\Agents;
 use Maryam\Brief;
 use Maryam\Marketing;
 use Maryam\Output;
+use Maryam\PostRenderer;
 use Maryam\Prompts;
 use Maryam\Store;
 use Throwable;
@@ -91,8 +92,25 @@ final class GraphicDesigner
             }
         }
 
+        // Brend uslubidagi TAYYOR rasm: fon (generatsiya bo'lsa) + sarlavha, narx, lenta, logo
+        $cardPath = null;
+        $card = (array) ($data['card'] ?? []);
+        $layout = (string) ($card['layout'] ?? '');
+        if (isset(PostRenderer::LAYOUTS[$layout])) {
+            try {
+                $png = PostRenderer::forBrand($this->brand)->render($layout, $card + ['bg' => $imagePath], PostRenderer::colors($this->store));
+                $cardPath = Output::dir($brief) . "/post$suffix.png";
+                file_put_contents($cardPath, $png);
+                $say('Tayyor rasm chizildi.');
+            } catch (Throwable $e) {
+                $say("Tayyor rasmni chizib bo'lmadi: {$e->getMessage()}");
+            }
+        }
+
         $result = [
             'brief_id' => $briefId,
+            'card_path' => $cardPath,
+            'card_layout' => $cardPath ? $layout : '',
             'image_prompt' => $imagePrompt,
             'alt_text' => $altText,
             'layout' => $layout,

@@ -118,7 +118,10 @@ final class BotJobs
             'template_id' => $result['template_id'] ?? null,
             'variant' => $variant,
         ]);
-        if ($design['image_generated'] && $design['image_path']) {
+        if (!empty($design['card_path'])) {
+            // Brend uslubidagi tayyor rasm — to'g'ridan-to'g'ri Instagram'ga
+            $tg->sendDocument($design['card_path'], "🎨 Tayyor rasm (1080×1350, sifat yo'qolmasligi uchun fayl sifatida)");
+        } elseif ($design['image_generated'] && $design['image_path']) {
             $tg->sendPhoto($design['image_path'], '🎨 ' . ($design['alt_text'] ?: 'Post uchun rasm'));
         }
         $text = "🎨 Dizayn: {$brief['topic']}\n";

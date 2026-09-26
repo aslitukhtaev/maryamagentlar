@@ -23,7 +23,7 @@ if [ ! -f /swapfile ] && [ "$(free -m | awk '/Mem:/ {print $2}')" -lt 1500 ]; th
 fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq git curl openssl php-fpm php-cli php-sqlite3 php-curl php-mbstring caddy >/dev/null
+apt-get install -y -qq git curl openssl php-fpm php-cli php-sqlite3 php-curl php-mbstring php-gd caddy >/dev/null
 PHP_VER=$(ls -d /etc/php/*/fpm | sort -V | tail -1 | cut -d/ -f4)   # masalan 8.3
 
 say "2/7 Loyiha kodi ($BRANCH)"

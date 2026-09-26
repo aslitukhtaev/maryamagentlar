@@ -75,7 +75,11 @@ function design_block(int $briefId, int $variantId): void
     }
     ?>
     <details class="design" open><summary><b>Dizayn</b></summary>
-      <?php if ($design['image_generated']): ?><img src="<?= e(url(['img' => $briefId, 'v' => $variantId])) ?>" alt="<?= e($design['alt_text']) ?>" style="max-width:100%;border-radius:8px;margin-top:8px"><?php endif; ?>
+      <?php if (!empty($design['card_path'])): ?>
+        <a href="<?= e(url(['img' => $briefId, 'v' => $variantId, 'card' => 1])) ?>" download="post-<?= $variantId ?>.png">
+          <img src="<?= e(url(['img' => $briefId, 'v' => $variantId, 'card' => 1])) ?>" alt="Tayyor rasm" style="max-width:360px;width:100%;border-radius:8px;margin-top:8px;display:block"></a>
+        <p class="small muted" style="margin:4px 0 0">Tayyor rasm — bosing va yuklab oling (1080×1350).</p>
+      <?php elseif ($design['image_generated']): ?><img src="<?= e(url(['img' => $briefId, 'v' => $variantId])) ?>" alt="<?= e($design['alt_text']) ?>" style="max-width:100%;border-radius:8px;margin-top:8px"><?php endif; ?>
       <?php if (!empty($design['layout'])): ?><p class="small muted" style="margin:8px 0 2px">Maket (dizayner yoki Canva uchun):</p><ul class="small"><?php foreach ($design['layout'] as $l): ?><li><?= e($l) ?></li><?php endforeach; ?></ul><?php endif; ?>
       <p class="small muted" style="margin:8px 0 2px">Fon rasmi uchun tavsif<?= $design['image_generated'] ? '' : " (rasm generatsiya bo'lmadi — boshqa vositada ishlating)" ?>:</p>
       <pre class="block"><?= e($design['image_prompt']) ?></pre>

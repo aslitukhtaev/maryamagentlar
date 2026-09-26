@@ -29,6 +29,7 @@ class GeminiMock
             $data = [
                 'layout' => ['1080x1350', "Sarlavha (yuqori 1/3, oq, qalin): ISTANBUL", "Narx plashkasi (pastki chap, oltin): 775$ dan", "Pastki lenta (to'q yashil): 55-303-22-22 · logotip"],
                 'image_prompt' => 'Galata tower at golden hour, Istanbul rooftops, clean negative space at the top third, no text, no watermark, no typography',
+                'card' => ['layout' => 'hot_tour', 'title' => 'Istanbul', 'subtitle' => 'Har kuni uchish · 5 kun · nonushta', 'price' => '775$ dan', 'label' => 'QAYNOQ TUR', 'cta' => "Direct'ga ISTANBUL deb yozing"],
                 'alt_text' => "Istanbul, Galata minorasi oqshom yorug'ida",
             ];
         } elseif (str_contains($system, "bo'limining boshlig'isan")) {

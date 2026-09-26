@@ -10,7 +10,7 @@ unset($_SESSION['old']);
 $nav = [
     'Ish' => ['home', 'studio', 'reja'],
     "O'qitish" => ['shablonlar', 'qoidalar', 'namunalar'],
-    'Bilim' => ['katalog', 'bilimlar'],
+    'Bilim' => ['brend', 'katalog', 'bilimlar'],
     'Kengaytirilgan' => ['promptlar'],
 ];
 ?>
@@ -80,6 +80,17 @@ $nav = [
   .steps li { margin:6px 0; }
   .done { color:var(--muted); text-decoration:line-through; }
   .busy { margin-left:6px; }
+  .ig-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; max-width:620px; margin:0 auto; }
+  .ig-grid a { position:relative; display:block; aspect-ratio:4/5; overflow:hidden; background:#ddd; }
+  .ig-grid img { width:100%; height:100%; object-fit:cover; display:block; }
+  .ig-grid span { position:absolute; left:0; right:0; bottom:0; background:rgba(0,0,0,.55); color:#fff; font-size:11px; padding:3px 6px; opacity:0; transition:opacity .15s; }
+  .ig-grid a:hover span, .ig-grid a:focus span { opacity:1; }
+  .logo-prev { background:#f3f2ec; border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:6px; }
+  .logo-prev.dark { background:var(--brand); }
+  .logo-prev img { max-height:70px; max-width:100%; display:block; }
+  .color-row { display:flex; align-items:center; gap:10px; font-weight:500; }
+  .color-row input { width:48px; height:36px; padding:2px; }
+  .swatch { display:inline-block; width:18px; height:18px; border-radius:4px; vertical-align:middle; border:1px solid var(--line); margin-right:4px; }
   @media (max-width: 820px) {
     .wrap { grid-template-columns:1fr; background:none; }
     aside { position:sticky; top:0; z-index:5; height:auto; display:flex; flex-wrap:nowrap; overflow-x:auto; gap:4px; padding:8px 10px; scrollbar-width:none; }

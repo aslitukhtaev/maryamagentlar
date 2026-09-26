@@ -36,7 +36,9 @@ Ikki agent (Telegram bot va web ilovani egasi ko'zi bilan tekshirgan) topgan nar
 | ✅ | P2 | O'chirishdan oldin tasdiq so'raladi; "Promptlar" — "Kengaytirilgan" bo'limida |
 | ✅ | P2 | Jargon kamaytirildi ("Hook" → "Birinchi qatorlar"), Studiya matnidagi ziddiyat tuzatildi |
 | ⏳ | P1 | Web'da ham yozish fon jarayonida + jonli holat (hozir sahifa kutib turadi) |
-| ⏳ | P1 | Instagram'ga TAYYOR rasm: fon + sarlavha + narx plashkasi + lenta + logotip, 1080x1350 PNG; karusel — har slayd |
+| ✅ | P1 | Instagram'ga TAYYOR rasm: fon + sarlavha + narx plashkasi + lenta + logo, 1080x1350 PNG (6 ta tartib) |
+| ✅ | P1 | "Brend va grid" sahifasi: logo yuklash, ranglar, 3x3 grid namunasi, dizayner qo'llanmasi |
+| ⏳ | P2 | Karuselning har slaydini alohida rasm qilib chiqarish (hozir bitta slayd) |
 | ⏳ | P1 | Stories formati (so'rovnoma, "Direct'ga yozing", "joy qoldi: N") |
 | ⏳ | P1 | Qaynoq turlarni tez kiritish: operator ro'yxati/Excel matnini joylash → katalog + tayyor paket |
 | ⏳ | P1 | Voronka: reja nisbati ko'rinsin; Direct javob skriptlari, bio, highlights, lid-magnit |

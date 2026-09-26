@@ -15,3 +15,5 @@ GOOGLE_APPLICATION_CREDENTIALS
 
 # Web sessiyalari (Telegram Mini App kirishi)
 data/sessions/
+# Web orqali yuklangan logolar (serverda saqlanadi)
+data/brand/

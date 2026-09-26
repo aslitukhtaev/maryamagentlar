@@ -71,6 +71,7 @@ const PAGES = [
     'qoidalar' => 'Qoidalar',
     'namunalar' => 'Oltin namunalar',
     'promptlar' => 'Promptlar',
+    'brend' => 'Brend va grid',
     'katalog' => 'Katalog',
     'bilimlar' => 'Bilimlar',
 ];
@@ -79,7 +80,7 @@ $page = isset(PAGES[$_GET['p'] ?? '']) ? $_GET['p'] : 'home';
 if ($page === 'home' && ($_GET['img'] ?? '') !== '') {
     // Dizayner yaratgan rasm (faqat output/ papkasidan)
     $design = $store->result((int) $_GET['img'], 'designer', isset($_GET['v']) ? 'variant_' . (int) $_GET['v'] : 'final');
-    $path = $design['image_path'] ?? null;
+    $path = $design[isset($_GET['card']) ? 'card_path' : 'image_path'] ?? null;
     $real = $path ? realpath($path) : false;
     if ($real && str_starts_with($real, realpath(ROOT . '/output') . DIRECTORY_SEPARATOR)) {
         header('Content-Type: ' . (str_ends_with($real, '.png') ? 'image/png' : 'image/jpeg'));
@@ -87,6 +88,33 @@ if ($page === 'home' && ($_GET['img'] ?? '') !== '') {
     } else {
         http_response_code(404);
     }
+    exit;
+}
+
+// Grid namunasi va logolar (rasm sifatida)
+if (isset($_GET['render']) || isset($_GET['asset'])) {
+    if (isset($_GET['asset'])) {
+        $file = ROOT . Maryam\PostRenderer::BRAND_DIR . '/' . ($_GET['asset'] === 'logo-white' ? 'logo-white.png' : 'logo.png');
+        if (!is_file($file)) {
+            http_response_code(404);
+            exit;
+        }
+        header('Content-Type: image/png');
+        header('Cache-Control: no-cache');
+        readfile($file);
+        exit;
+    }
+    if (!function_exists('imagecreatetruecolor')) {
+        http_response_code(503); // serverda php-gd yo'q
+        exit;
+    }
+    $samples = Maryam\PostRenderer::gridSamples(Maryam\Marketing::products());
+    [$layout, $data] = $samples[(int) ($_GET['i'] ?? 0)] ?? $samples[0];
+    header('Content-Type: image/png');
+    if (isset($_GET['dl'])) {
+        header('Content-Disposition: attachment; filename="maryam-' . $layout . '-' . (int) ($_GET['i'] ?? 0) . '.png"');
+    }
+    echo Maryam\PostRenderer::forBrand($brand)->render($layout, $data, Maryam\PostRenderer::colors($store));
     exit;
 }
 

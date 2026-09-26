@@ -111,6 +111,51 @@ switch ($action) {
         flash('Prompt asl holatiga qaytarildi.');
         redirect(url(['p' => 'promptlar', 'name' => $name]));
 
+    // ---------- Brend: logo va ranglar ----------
+    case 'brand_upload':
+        if (!function_exists('imagecreatefromstring')) {
+            throw new RuntimeException("Serverda rasm moduli (php-gd) yo'q — o'rnatish skriptini qayta ishga tushiring.");
+        }
+        $dir = ROOT . Maryam\PostRenderer::BRAND_DIR;
+        @mkdir($dir, 0775, true);
+        $saved = 0;
+        foreach (['logo' => 'logo.png', 'logo_white' => 'logo-white.png'] as $field => $name) {
+            $f = $_FILES[$field] ?? null;
+            if (!$f || $f['error'] === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+            if ($f['error'] !== UPLOAD_ERR_OK || $f['size'] > 5 * 1024 * 1024) {
+                throw new InvalidArgumentException("Fayl yuklanmadi (5 MB dan kichik PNG/JPG bo'lsin).");
+            }
+            // Qayta kodlaymiz: faqat haqiqiy rasm saqlanadi, shaffoflik saqlanadi
+            $im = @imagecreatefromstring((string) file_get_contents($f['tmp_name']));
+            if (!$im) {
+                throw new InvalidArgumentException("Bu rasm fayli emas. PNG (shaffof fonli) yoki JPG yuklang.");
+            }
+            imagesavealpha($im, true);
+            imagepng($im, "$dir/$name");
+            $saved++;
+        }
+        flash($saved ? "Logo saqlandi — barcha rasmlarda endi shu logo turadi." : "Fayl tanlanmadi.");
+        redirect(url(['p' => 'brend']));
+
+    case 'brand_logo_delete':
+        @unlink(ROOT . Maryam\PostRenderer::BRAND_DIR . '/' . (($_POST['which'] ?? '') === 'logo-white' ? 'logo-white.png' : 'logo.png'));
+        flash("Logo o'chirildi.");
+        redirect(url(['p' => 'brend']));
+
+    case 'brand_colors':
+        $colors = [];
+        foreach (['primary', 'accent', 'dark'] as $k) {
+            $v = (string) ($_POST[$k] ?? '');
+            if (preg_match('/^#[0-9a-fA-F]{6}$/', $v)) {
+                $colors[$k] = strtolower($v);
+            }
+        }
+        $store->setMeta('brand_colors', json_encode($colors));
+        flash('Ranglar saqlandi.');
+        redirect(url(['p' => 'brend']));
+
     // ---------- Umumiy saqlash / o'chirish ----------
     case 'save':
         $table = (string) $_POST['table'];

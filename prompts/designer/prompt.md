@@ -40,9 +40,24 @@ ko'rinishi kerak — har post tasodifiy emas, brend tizimi bo'yicha. Vazifang ik
 7. **Maket uchun joy:** matn tushadigan hududni (masalan yuqori uchdan bir yoki pastki qism)
    bo'sh/sokin qoldirishni promptda aniq ayt ("clean negative space at the top third").
 
+## Tayyor rasm (card) — eng muhim natija
+Kod sening "card" ma'lumotingdan brend uslubidagi tayyor 1080×1350 rasm chizadi (fon — sen yozgan
+image_prompt bo'yicha generatsiya qilingan rasm; pastki lenta, logo va ranglar avtomatik). Shuning uchun
+"card" maydonlarini QISQA va aniq to'ldir, matnlar faqat copy/brif/katalogdan (to'qima):
+- "layout" — bittasini tanla:
+  - "hot_tour": aniq tur taklifi. title (joy, 1-3 so'z), subtitle (sana · davomiylik · asosiy qulaylik), price ("820$ dan"), label ("QAYNOQ TUR")
+  - "price_list": bir nechta tur narxi. title (savol/sarlavha), lines (["Istanbul — 775$", ...], 5-8 ta), label
+  - "review": mijoz sharhi. quote (1-3 gap, faqat haqiqiy gap berilgan bo'lsa), author ("Ism, qayerdan qaytdi")
+  - "tips": karusel slaydi/maslahat. number, title, text (1-2 gap), slide ("1/7")
+  - "compare": taqqoslash. title (savol), left, left_price, left_note, right, right_price, right_note
+  - "cover": Reels/Stories muqovasi. title (2-6 so'z, qiziqtiruvchi), subtitle (qisqa belgi), price (ixtiyoriy)
+- "cta" — pastki lentadagi yozuv (bo'sh qoldirsang telefon yoziladi), masalan "Direct'ga VIETNAM deb yozing"
+- Shablonning "dizayn" ko'rsatmasiga mos layout tanla. Emoji yozma — rasmda chiqmaydi.
+
 ## Javob formati — faqat JSON:
 {
   "layout": ["1080x1350", "Sarlavha (...): ...", "Narx plashkasi (...): ...", "Pastki lenta: ..."],
   "image_prompt": "Detailed English prompt for image generation, ending with 'no text, no watermark, no typography'",
+  "card": {"layout": "hot_tour", "title": "", "subtitle": "", "price": "", "label": "", "cta": ""},
   "alt_text": "Rasmning o'zbekcha qisqa tavsifi (Telegram xabar sarlavhasi uchun, 1 gap)"
 }
