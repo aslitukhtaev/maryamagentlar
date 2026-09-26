@@ -40,6 +40,16 @@ if (isset($_GET['tglogin'])) {
     exit('{"ok":true}');
 }
 
+// Botning pastki menyu tugmasi: manzildagi imzolangan kalit bilan kirish (initData berilmaydi)
+if (empty($_SESSION['auth']) && isset($_GET['k'])) {
+    $id = TelegramAuth::verifyLinkToken((string) $_GET['k'], (string) Env::get('TELEGRAM_BOT_TOKEN', ''), TelegramAuth::allowedIds());
+    if ($id !== null) {
+        session_regenerate_id(true);
+        $_SESSION['auth'] = "telegram:$id";
+        $_SESSION['tg'] = true;
+    }
+}
+
 $password = Env::get('WEB_PASSWORD', '');
 if (empty($_SESSION['auth']) && $password !== '') {
     if (hash_equals($password, (string) ($_SERVER['PHP_AUTH_PW'] ?? ''))) {
@@ -62,6 +72,12 @@ if (isset($_GET['tg'])) {
 set_time_limit(1800); // haftalik reja bir necha daqiqa davom etadi
 
 ['ai' => $ai, 'store' => $store, 'brand' => $brand, 'tones' => $tones] = appVertex();
+
+// Ilova o'z manzilini eslab qoladi — bot shu manzil bilan "Ilovani ochish" tugmasini yasaydi (.env shart emas)
+$host = (string) ($_SERVER['HTTP_HOST'] ?? '');
+if ($https && !empty($_SESSION['auth']) && preg_match('/^[a-z0-9.-]+$/i', $host) && $store->meta('webapp_url') !== "https://$host") {
+    $store->setMeta('webapp_url', "https://$host");
+}
 
 const PAGES = [
     'studio' => 'Copywriter',

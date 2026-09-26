@@ -41,6 +41,7 @@ final class TelegramBot
     ) {
         $this->allowed = array_values(array_filter(array_map('trim', explode(',', $allowedRaw ?: $ownerChatId))));
         $this->manager = new Manager($ai, $store, $brand, $tones);
+        BotUi::useStore($store);
     }
 
     /** Buyruqlar ro'yxati va "Ilova" menyu tugmasi (bir marta, ishga tushganda). */
@@ -144,7 +145,7 @@ final class TelegramBot
         }
         $text = trim((string) ($m['text'] ?? $m['caption'] ?? ''));
         if ($text === '') {
-            $tg->message("Hozircha faqat matnni tushunaman. Menyudan tanlang yoki vazifani yozib yuboring.", BotUi::mainKeyboard());
+            $tg->message("Hozircha faqat matnni tushunaman. Menyudan tanlang yoki vazifani yozib yuboring.", BotUi::mainKeyboard($chatId));
             return;
         }
         echo "→ [$chatId] " . mb_substr($text, 0, 80) . "\n";
@@ -164,15 +165,15 @@ final class TelegramBot
             case '/menu':
                 $this->reset($chatId);
                 $tg->message("Assalomu alaykum! Men — Maryam Travel marketing bo'limi.\nQuyidagi menyudan tanlang 👇"
-                    . ($this->allowed ? '' : "\n\n⚠ Sozlash: .env faylida TELEGRAM_CHAT_ID=$chatId deb yozing, shunda bot faqat sizga javob beradi."), BotUi::mainKeyboard());
+                    . ($this->allowed ? '' : "\n\n⚠ Sozlash: .env faylida TELEGRAM_CHAT_ID=$chatId deb yozing, shunda bot faqat sizga javob beradi."), BotUi::mainKeyboard($chatId));
                 return;
             case '/bekor':
                 $this->reset($chatId);
-                $tg->message('Bekor qilindi. Menyudan tanlang 👇', BotUi::mainKeyboard());
+                $tg->message('Bekor qilindi. Menyudan tanlang 👇', BotUi::mainKeyboard($chatId));
                 return;
             case '/yordam':
             case '/help':
-                $tg->message(BotUi::helpText(), BotUi::mainKeyboard());
+                $tg->message(BotUi::helpText(), BotUi::mainKeyboard($chatId));
                 return;
             case '/post':
                 $this->askTopic($tg, $chatId);
@@ -196,10 +197,10 @@ final class TelegramBot
                 $button = BotUi::webAppButton();
                 $button
                     ? $tg->message("Ilova: Copywriter, Kontent-strateg, Dizayner, O'qitish studiyasi va Kompaniya ma'lumotlari.", $button)
-                    : $tg->message("Ilova manzili sozlanmagan (.env: WEBAPP_URL).", BotUi::mainKeyboard());
+                    : $tg->message("Ilova manzili sozlanmagan (.env: WEBAPP_URL).", BotUi::mainKeyboard($chatId));
                 return;
             case BotUi::BTN_HELP:
-                $tg->message(BotUi::helpText(), BotUi::mainKeyboard());
+                $tg->message(BotUi::helpText(), BotUi::mainKeyboard($chatId));
                 return;
         }
 
@@ -216,7 +217,7 @@ final class TelegramBot
                     $this->store->rate($v['db_id'], (int) ($v['rating'] ?? 3), $text);
                 }
                 unset($this->state[$chatId]);
-                $tg->message("Rahmat! Izohingiz saqlandi — O'qituvchi agent shundan qoida chiqaradi.", BotUi::mainKeyboard());
+                $tg->message("Rahmat! Izohingiz saqlandi — O'qituvchi agent shundan qoida chiqaradi.", BotUi::mainKeyboard($chatId));
                 return;
             case 'plan_wish':
                 unset($this->state[$chatId]);
@@ -362,7 +363,7 @@ final class TelegramBot
                 $this->askTopic($tg, $chatId);
                 break;
             case 'menu':
-                $tg->message('Menyudan tanlang 👇', BotUi::mainKeyboard());
+                $tg->message('Menyudan tanlang 👇', BotUi::mainKeyboard($chatId));
                 break;
             case 'prod':
                 $p = current(array_filter(Marketing::products(), static fn ($x) => (string) $x['id'] === $arg));

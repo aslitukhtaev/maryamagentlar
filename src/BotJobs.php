@@ -24,6 +24,7 @@ final class BotJobs
         private array $brand,
         private array $tones,
     ) {
+        BotUi::useStore($store);
     }
 
     /** Ishni fon jarayonida ishga tushiradi (Linux va Windows). */

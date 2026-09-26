@@ -22,21 +22,36 @@ final class BotUi
 
     private const FORMAT_LABELS = ['post' => 'POST', 'reels' => 'REELS', 'karusel' => 'KARUSEL', 'reklama' => 'REKLAMA'];
 
-    public static function webAppUrl(): string
+    private static ?Store $store = null;
+
+    public static function useStore(Store $store): void
     {
-        $url = trim((string) Env::get('WEBAPP_URL', ''));
-        return str_starts_with($url, 'https://') ? rtrim($url, '/') . '/?tg=1' : '';
+        self::$store = $store;
     }
 
-    public static function mainKeyboard(): array
+    /**
+     * Ilova manzili: .env dagi WEBAPP_URL, bo'lmasa — ilova birinchi ochilganda o'zi eslab qolgan manzil.
+     * $chatId berilsa — pastki menyu tugmasi uchun imzolangan kirish kaliti qo'shiladi.
+     */
+    public static function webAppUrl(string $chatId = ''): string
     {
-        $app = self::webAppUrl();
+        $url = trim((string) Env::get('WEBAPP_URL', '')) ?: (string) self::$store?->meta('webapp_url');
+        if (!str_starts_with($url, 'https://')) {
+            return '';
+        }
+        $url = rtrim($url, '/') . '/?tg=1';
+        $token = (string) Env::get('TELEGRAM_BOT_TOKEN', '');
+        return $chatId !== '' && $token !== '' ? $url . '&k=' . TelegramAuth::linkToken($chatId, $token) : $url;
+    }
+
+    public static function mainKeyboard(string $chatId = ''): array
+    {
+        $app = self::webAppUrl($chatId);
         return [
             'keyboard' => [
                 [['text' => self::BTN_POST], ['text' => self::BTN_PLAN]],
-                // Klaviatura tugmasi Mini App'ga imzo (initData) bermaydi — shuning uchun oddiy tugma,
-                // bosilganda xabar ichidagi "Ochish" (web_app) tugmasi yuboriladi
-                [['text' => self::BTN_RECENT], ['text' => $app !== '' ? self::BTN_APP : self::BTN_HELP]],
+                // Ilova tugmasi to'g'ridan-to'g'ri ochadi (manzilda shu foydalanuvchining imzolangan kaliti bor)
+                [['text' => self::BTN_RECENT], $app !== '' && $chatId !== '' ? ['text' => self::BTN_APP, 'web_app' => ['url' => $app]] : ['text' => $app !== '' ? self::BTN_APP : self::BTN_HELP]],
                 ...($app !== '' ? [[['text' => self::BTN_HELP]]] : []),
             ],
             'resize_keyboard' => true,
