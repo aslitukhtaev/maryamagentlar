@@ -5,6 +5,7 @@ use Maryam\Marketing;
 
 $brandFilled = trim((string) ($brand['phone'] ?? '')) !== '';
 $steps = [
+    [is_file(Maryam\BrandAssets::dir() . '/logo-white.png') && count(Maryam\BrandAssets::refs()) >= 3, "Brend va grid: logoni va 3+ dizayn namunasini yuklang — tayyor rasmlar sizning uslubingizda chiqadi", 'brend'],
     [$brandFilled && $stats['knowledge'] + count($brand['facts'] ?? []) >= 3, 'Bilimlar: kompaniya faktlarini kiriting (tajriba, ofislar, afzalliklar)', 'bilimlar'],
     [count(Marketing::products()) > 0, "Katalog: sotuvdagi turlarni narx va sanasi bilan kiriting — agentlar [NARX] qoldirmaydi", 'katalog'],
     [$stats['examples'] >= 5, "Oltin namunalar: eng yaxshi 5-20 ta postingizni qo'shing (hozir {$stats['examples']} ta)", 'namunalar'],

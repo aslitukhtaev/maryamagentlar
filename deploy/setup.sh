@@ -75,6 +75,8 @@ request_terminate_timeout = 1800
 php_admin_value[max_execution_time] = 1800
 php_admin_value[memory_limit] = 256M
 php_admin_value[upload_max_filesize] = 10M
+php_admin_value[post_max_size] = 60M
+php_admin_value[max_file_uploads] = 20
 EOF
 systemctl restart "php$PHP_VER-fpm"
 

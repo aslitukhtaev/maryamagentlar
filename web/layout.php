@@ -85,9 +85,18 @@ $nav = [
   .ig-grid img { width:100%; height:100%; object-fit:cover; display:block; }
   .ig-grid span { position:absolute; left:0; right:0; bottom:0; background:rgba(0,0,0,.55); color:#fff; font-size:11px; padding:3px 6px; opacity:0; transition:opacity .15s; }
   .ig-grid a:hover span, .ig-grid a:focus span { opacity:1; }
-  .logo-prev { background:#f3f2ec; border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:6px; }
+  .upload-row { display:flex; gap:14px; align-items:center; margin:12px 0; }
+  .logo-prev { background:#f3f2ec; border:1px solid var(--line); border-radius:10px; width:150px; height:84px; flex:none; display:grid; place-items:center; padding:8px; }
   .logo-prev.dark { background:var(--brand); }
-  .logo-prev img { max-height:70px; max-width:100%; display:block; }
+  .logo-prev img { max-height:66px; max-width:130px; display:block; }
+  .upload-btn { display:inline-block; margin-top:6px; background:var(--brand); color:#fff; border-radius:8px; padding:7px 14px; font-weight:600; font-size:14px; cursor:pointer; }
+  .upload-btn.big { display:block; text-align:center; padding:14px; font-size:15px; margin:4px 0 0; }
+  .ref-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:8px; margin-top:12px; }
+  .ref { position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; background:#eee; }
+  .ref img { width:100%; height:100%; object-fit:cover; display:block; }
+  .ref form { position:absolute; top:4px; right:4px; margin:0; }
+  .ref-del { background:rgba(0,0,0,.6); color:#fff; border-radius:99px; width:26px; height:26px; padding:0; font-size:17px; line-height:26px; }
+  .ref-tag { position:absolute; left:4px; bottom:4px; background:var(--gold); color:#1b1f1d; font-size:10px; font-weight:700; border-radius:99px; padding:1px 7px; }
   .color-row { display:flex; align-items:center; gap:10px; font-weight:500; }
   .color-row input { width:48px; height:36px; padding:2px; }
   .swatch { display:inline-block; width:18px; height:18px; border-radius:4px; vertical-align:middle; border:1px solid var(--line); margin-right:4px; }

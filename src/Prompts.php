@@ -36,11 +36,12 @@ final class Prompts
     }
 
     /** Bitta AI so'rovi: prompt + kontekst (JSON) -> ai->json() natijasi. */
-    public static function ask(object $ai, Store $store, string $name, array $context, float $temperature, bool $smart, ?int $briefId = null, string $agent = '', string $step = ''): array
+    public static function ask(object $ai, Store $store, string $name, array $context, float $temperature, bool $smart, ?int $briefId = null, string $agent = '', string $step = '', array $images = []): array
     {
         $user = "Kontekst (JSON):\n" . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
               . "\n\nVazifani bajar va faqat ko'rsatilgan formatdagi JSON qaytar.";
-        $result = $ai->json(self::get($store, $name), $user, $temperature, $smart);
+        $result = $images ? $ai->json(self::get($store, $name), $user, $temperature, $smart, $images)
+                          : $ai->json(self::get($store, $name), $user, $temperature, $smart);
         $store->logRun($briefId, $agent ?: explode('/', $name)[0], $step ?: explode('/', $name)[1], $user, $result);
         return $result['data'] ?? [];
     }

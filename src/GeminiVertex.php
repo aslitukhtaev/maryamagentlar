@@ -30,14 +30,15 @@ class GeminiVertex
     }
 
     /** AI'dan JSON javob so'raydi. */
-    public function json(string $system, string $user, float $temperature = 0.8, bool $smart = false): array
+    /** @param array<int, array{mime: string, data: string}> $images ixtiyoriy namuna rasmlar (base64) */
+    public function json(string $system, string $user, float $temperature = 0.8, bool $smart = false, array $images = []): array
     {
-        $result = $this->generate($system, $user, $temperature, $smart ? $this->smartModel : $this->fastModel);
+        $result = $this->generate($system, $user, $temperature, $smart ? $this->smartModel : $this->fastModel, $images);
         $result['data'] = self::decodeJson($result['text']);
         return $result;
     }
 
-    protected function generate(string $system, string $user, float $temperature, string $model): array
+    protected function generate(string $system, string $user, float $temperature, string $model, array $images = []): array
     {
         $main = $this->smartModel ? $this->smartModel : $this->fastModel;
         $models = array_values(array_unique([$model, ...$this->fallbackModels]));
@@ -45,7 +46,7 @@ class GeminiVertex
 
         foreach ($models as $i => $m) {
             try {
-                $result = $this->call($system, $user, $temperature, $m);
+                $result = $this->call($system, $user, $temperature, $m, $images);
                 $result['model_used'] = $m;
                 return $result;
             } catch (RuntimeException $e) {
@@ -61,12 +62,12 @@ class GeminiVertex
         throw $lastError ?? new RuntimeException('Hech bir model javob bermadi.');
     }
 
-    private function call(string $system, string $user, float $temperature, string $model): array
+    private function call(string $system, string $user, float $temperature, string $model, array $images = []): array
     {
         $started = microtime(true);
         $response = $this->postToModel($model, [
             'systemInstruction' => ['parts' => [['text' => $system]]],
-            'contents' => [['role' => 'user', 'parts' => [['text' => $user]]]],
+            'contents' => [['role' => 'user', 'parts' => [...self::imageParts($images), ['text' => $user]]]],
             'generationConfig' => [
                 'temperature' => $temperature,
                 'responseMimeType' => 'application/json',
@@ -107,12 +108,12 @@ class GeminiVertex
      *
      * @return array{base64: string, mime_type: string, model_used: string}
      */
-    public function generateImage(string $prompt, array $models = ['gemini-3-pro-image', 'gemini-2.5-flash-image', 'gemini-3.1-flash-image']): array
+    public function generateImage(string $prompt, array $models = ['gemini-3-pro-image', 'gemini-2.5-flash-image', 'gemini-3.1-flash-image'], array $images = []): array
     {
         $lastError = null;
         foreach ($models as $model) {
             try {
-                return $this->requestImage($prompt, $model);
+                return $this->requestImage($prompt, $model, $images);
             } catch (RuntimeException $e) {
                 $lastError = $e;
                 if (!preg_match('/\((404|429|503)\)/', $e->getMessage())) {
@@ -123,10 +124,10 @@ class GeminiVertex
         throw $lastError ?? new RuntimeException('Rasm generatsiya qiluvchi model topilmadi.');
     }
 
-    private function requestImage(string $prompt, string $model): array
+    private function requestImage(string $prompt, string $model, array $images = []): array
     {
         $response = $this->postToModel($model, [
-            'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+            'contents' => [['role' => 'user', 'parts' => [...self::imageParts($images), ['text' => $prompt]]]],
             'generationConfig' => ['responseModalities' => ['TEXT', 'IMAGE']],
         ]);
 
@@ -147,6 +148,11 @@ class GeminiVertex
         }
 
         throw new RuntimeException("Model ($model) rasm emas, faqat matn qaytardi.");
+    }
+
+    public static function imageParts(array $images): array
+    {
+        return array_map(static fn (array $i) => ['inlineData' => ['mimeType' => $i['mime'], 'data' => $i['data']]], $images);
     }
 
     /** Vertex AI'ga autentifikatsiyalangan so'rov yuboradi, javobni JSON massiv qilib qaytaradi. */

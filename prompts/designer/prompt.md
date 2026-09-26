@@ -10,6 +10,10 @@ ko'rinishi kerak — har post tasodifiy emas, brend tizimi bo'yicha. Vazifang ik
 - "company_rules" — brend uslubi va rahbar qoidalari (ranglar, shrift, lenta, logotip)
 - "copy" — copywriter yozgan hook/CTA/vizual g'oya: maketdagi matnlarni shundan ol, qisqartir
 - "brief", "brand", "tone_profile", "big_idea"
+- ILOVA QILINGAN RASMLAR ("reference_images") — kompaniyaning o'z dizayn namunalari (Instagram gridi,
+  yoqqan postlar). Ular — uslub qonuni: rang muhiti, foto uslubi, kompozitsiya, sarlavha joylashuvi,
+  qaysi tartib (layout) ko'proq ishlatilgani. Maket va image_prompt'ni shularga yaqin qil; ulardagi
+  matn, narx va logolarni ko'chirma.
 
 ## Maket (layout) qanday yoziladi
 - O'lcham (masalan 1080x1350), keyin yuqoridan pastga har element alohida qatorda:

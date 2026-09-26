@@ -94,12 +94,14 @@ if ($page === 'home' && ($_GET['img'] ?? '') !== '') {
 // Grid namunasi va logolar (rasm sifatida)
 if (isset($_GET['render']) || isset($_GET['asset'])) {
     if (isset($_GET['asset'])) {
-        $file = ROOT . Maryam\PostRenderer::BRAND_DIR . '/' . ($_GET['asset'] === 'logo-white' ? 'logo-white.png' : 'logo.png');
-        if (!is_file($file)) {
+        $file = $_GET['asset'] === 'ref'
+            ? Maryam\BrandAssets::refPath((string) ($_GET['n'] ?? ''), isset($_GET['sm']))
+            : ROOT . Maryam\PostRenderer::BRAND_DIR . '/' . ($_GET['asset'] === 'logo-white' ? 'logo-white.png' : 'logo.png');
+        if (!$file || !is_file($file)) {
             http_response_code(404);
             exit;
         }
-        header('Content-Type: image/png');
+        header('Content-Type: ' . (str_ends_with($file, '.jpg') ? 'image/jpeg' : 'image/png'));
         header('Cache-Control: no-cache');
         readfile($file);
         exit;

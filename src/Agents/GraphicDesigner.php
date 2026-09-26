@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Maryam\Agents;
 
+use Maryam\BrandAssets;
 use Maryam\Brief;
 use Maryam\Marketing;
 use Maryam\Output;
@@ -65,7 +66,10 @@ final class GraphicDesigner
         }
 
         $say('1/2 Kontseptsiya: maket va rasm prompti tayyorlanmoqda...');
-        $data = Prompts::ask($this->ai, $this->store, 'designer/prompt', $context, 0.8, true, $briefId, self::NAME, 'prompt');
+        // Kompaniyaning dizayn namunalari (web'da yuklangan grid/postlar) — agent ularni rasm sifatida ko'radi
+        $refs = BrandAssets::refsForAi();
+        $context['reference_images'] = $refs ? count($refs) . " ta kompaniya dizayn namunasi ilova qilingan" : "yo'q";
+        $data = Prompts::ask($this->ai, $this->store, 'designer/prompt', $context, 0.8, true, $briefId, self::NAME, 'prompt', $refs);
         $layout = array_values(array_map('strval', (array) ($data['layout'] ?? [])));
         // Har variantning dizayni alohida saqlanadi (biri ikkinchisini o'chirmasin)
         $variantId = (int) ($options['variant']['db_id'] ?? 0);
@@ -80,7 +84,9 @@ final class GraphicDesigner
         if ($imagePrompt !== '' && method_exists($this->ai, 'generateImage')) {
             $say('2/2 Rasm generatsiya qilinmoqda...');
             try {
-                $image = $this->ai->generateImage($imagePrompt);
+                $image = $refs
+                    ? $this->ai->generateImage($imagePrompt . ' Match the photographic style, colour grading and composition of the attached reference images, but do not copy any text or logos from them.', images: array_slice($refs, 0, 2))
+                    : $this->ai->generateImage($imagePrompt);
                 $ext = str_contains($image['mime_type'], 'png') ? 'png' : 'jpg';
                 $imagePath = Output::dir($brief) . "/designer$suffix.$ext";
                 file_put_contents($imagePath, base64_decode($image['base64']));

@@ -16,9 +16,13 @@ class GeminiMock
     ) {
     }
 
-    public function json(string $system, string $user, float $temperature = 0.8, bool $smart = false): array
+    /** Oxirgi so'rovga ilova qilingan rasmlar soni (testlar uchun). */
+    public static int $lastImages = 0;
+
+    public function json(string $system, string $user, float $temperature = 0.8, bool $smart = false, array $images = []): array
     {
         $started = microtime(true);
+        self::$lastImages = count($images);
         
         // System prompt'dan agentni aniqlang
         if (str_contains($system, 'QAYTA ISHLATILADIGAN SHABLON')) {

@@ -31,14 +31,14 @@ class Gemini
      *
      * @return array{data: array, text: string, model: string, tokens_in: int, tokens_out: int, ms: int}
      */
-    public function json(string $system, string $user, float $temperature = 0.8, bool $smart = false): array
+    public function json(string $system, string $user, float $temperature = 0.8, bool $smart = false, array $images = []): array
     {
         $main = $smart ? $this->smartModel : $this->fastModel;
         $models = array_values(array_unique([$main, ...$this->fallbackModels]));
         $lastError = null;
         foreach ($models as $i => $model) {
             try {
-                $result = $this->generate($system, $user, $temperature, $model);
+                $result = $this->generate($system, $user, $temperature, $model, $images);
                 $result['data'] = self::decodeJson($result['text']);
                 $result['model_used'] = $model; // Qaysi model ishlandi — log uchun
                 return $result;
@@ -54,7 +54,7 @@ class Gemini
     }
 
     /** Bitta so'rov. Vaqtinchalik xatolarda (429, 5xx) 3 martagacha qayta urinadi. */
-    protected function generate(string $system, string $user, float $temperature, string $model): array
+    protected function generate(string $system, string $user, float $temperature, string $model, array $images = []): array
     {
         if ($this->apiKey === '') {
             throw new RuntimeException('GEMINI_API_KEY topilmadi. .env faylini tekshiring (namuna: .env.example).');
@@ -62,7 +62,7 @@ class Gemini
 
         $payload = [
             'systemInstruction' => ['parts' => [['text' => $system]]],
-            'contents' => [['role' => 'user', 'parts' => [['text' => $user]]]],
+            'contents' => [['role' => 'user', 'parts' => [...GeminiVertex::imageParts($images), ['text' => $user]]]],
             'generationConfig' => [
                 'temperature' => $temperature,
                 'responseMimeType' => 'application/json',

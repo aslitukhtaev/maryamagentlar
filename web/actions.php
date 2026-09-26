@@ -113,30 +113,38 @@ switch ($action) {
 
     // ---------- Brend: logo va ranglar ----------
     case 'brand_upload':
-        if (!function_exists('imagecreatefromstring')) {
-            throw new RuntimeException("Serverda rasm moduli (php-gd) yo'q — o'rnatish skriptini qayta ishga tushiring.");
-        }
-        $dir = ROOT . Maryam\PostRenderer::BRAND_DIR;
-        @mkdir($dir, 0775, true);
         $saved = 0;
-        foreach (['logo' => 'logo.png', 'logo_white' => 'logo-white.png'] as $field => $name) {
+        foreach (['logo' => 'logo', 'logo_white' => 'logo-white'] as $field => $which) {
             $f = $_FILES[$field] ?? null;
             if (!$f || $f['error'] === UPLOAD_ERR_NO_FILE) {
                 continue;
             }
-            if ($f['error'] !== UPLOAD_ERR_OK || $f['size'] > 5 * 1024 * 1024) {
-                throw new InvalidArgumentException("Fayl yuklanmadi (5 MB dan kichik PNG/JPG bo'lsin).");
+            if ($f['error'] !== UPLOAD_ERR_OK || $f['size'] > 10 * 1024 * 1024) {
+                throw new InvalidArgumentException("Fayl yuklanmadi (10 MB dan kichik rasm bo'lsin).");
             }
-            // Qayta kodlaymiz: faqat haqiqiy rasm saqlanadi, shaffoflik saqlanadi
-            $im = @imagecreatefromstring((string) file_get_contents($f['tmp_name']));
-            if (!$im) {
-                throw new InvalidArgumentException("Bu rasm fayli emas. PNG (shaffof fonli) yoki JPG yuklang.");
-            }
-            imagesavealpha($im, true);
-            imagepng($im, "$dir/$name");
+            Maryam\BrandAssets::saveLogo($f['tmp_name'], $which);
             $saved++;
         }
         flash($saved ? "Logo saqlandi — barcha rasmlarda endi shu logo turadi." : "Fayl tanlanmadi.");
+        redirect(url(['p' => 'brend']));
+
+    case 'ref_upload':
+        $files = $_FILES['refs'] ?? null;
+        $added = 0;
+        foreach ((array) ($files['tmp_name'] ?? []) as $i => $tmp) {
+            if (($files['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || $files['size'][$i] > 10 * 1024 * 1024) {
+                continue;
+            }
+            Maryam\BrandAssets::addRef($tmp);
+            $added++;
+        }
+        flash($added ? "$added ta namuna qo'shildi — dizayner agent endi shu uslubga qarab ishlaydi."
+                     : "Rasm tanlanmadi yoki fayl juda katta (har biri 10 MB gacha).", $added ? 'ok' : 'error');
+        redirect(url(['p' => 'brend']));
+
+    case 'ref_delete':
+        Maryam\BrandAssets::deleteRef((string) ($_POST['name'] ?? ''));
+        flash("Namuna o'chirildi.");
         redirect(url(['p' => 'brend']));
 
     case 'brand_logo_delete':

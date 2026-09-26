@@ -7,20 +7,69 @@ use Maryam\PostRenderer;
 $colors = PostRenderer::colors($store);
 $samples = PostRenderer::gridSamples(Marketing::products());
 $dir = ROOT . PostRenderer::BRAND_DIR;
-$logos = ['logo' => ['Asosiy logo (rangli)', 'Oq yoki och fonlar uchun'], 'logo-white' => ['Oq logo', "To'q yashil lenta va fotolar ustida — rasmlarda shu ishlatiladi"]];
-$v = static fn () => (string) @filemtime("$dir/logo.png") . @filemtime("$dir/logo-white.png") . md5((string) json_encode($colors));
+$logos = ['logo-white' => ['Oq logo', 'Rasmlardagi yashil lentada shu turadi'], 'logo' => ['Rangli logo', 'Och fonlar uchun']];
+$v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("$dir/logo-white.png") . json_encode($colors)), 0, 8);
 ?>
 <h1>Brend va grid</h1>
-<p class="lead">Dizayner agent va sizning dizayneringiz uchun yagona tizim: logo, ranglar, shrift va 6 ta tayyor rasm tartibi.
-  Agentlar har bir postga shu uslubda tayyor 1080×1350 rasm chiqaradi — sahifa bir xil va professional ko'rinadi.</p>
+<p class="lead">Logongizni va dizayn namunalaringizni shu yerga yuklang. Dizayner agent namunalarga qarab uslubni moslaydi,
+  logoni esa har bir tayyor rasmga o'zi qo'yadi.</p>
 
+<div class="grid2">
+  <div class="card">
+    <h3>1. Logo</h3>
+    <p class="small muted">PNG, shaffof fonli bo'lsa eng yaxshi. <b>Oq logo</b> yashil lenta va fotolar ustida ishlatiladi.</p>
+    <?php foreach ($logos as $key => [$label, $hint]): $has = is_file("$dir/$key.png"); ?>
+      <form method="post" enctype="multipart/form-data" class="upload-row" <?= busy_attr() ?>><?= csrf_field() ?>
+        <input type="hidden" name="action" value="brand_upload">
+        <div class="logo-prev <?= $key === 'logo-white' ? 'dark' : '' ?>">
+          <?php if ($has): ?><img src="<?= e(url(['asset' => $key, 'v' => $v()])) ?>" alt="<?= e($label) ?>">
+          <?php else: ?><span class="muted small"><?= $key === 'logo-white' ? '<span style="color:#cfe0da">Yuklanmagan</span>' : 'Yuklanmagan' ?></span><?php endif; ?>
+        </div>
+        <div>
+          <b class="small"><?= e($label) ?></b><br><span class="small muted"><?= e($hint) ?></span><br>
+          <label class="upload-btn"><?= $has ? 'Almashtirish' : 'Yuklash' ?>
+            <input type="file" name="<?= $key === 'logo-white' ? 'logo_white' : 'logo' ?>" accept="image/*" hidden onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()"></label>
+          <button type="submit" hidden></button><span class="busy muted small" hidden>Yuklanmoqda…</span>
+        </div>
+      </form>
+    <?php endforeach; ?>
+  </div>
+
+  <div class="card">
+    <h3>2. Dizayn namunalari (grid)</h3>
+    <p class="small muted">Instagram gridingiz skrinshoti, yoqqan postlar yoki dizayneringiz ishlari. Dizayner agent eng yangi 4 tasiga
+      qarab uslub, kompozitsiya va ranglarni moslaydi. Bir nechtasini birdan tanlash mumkin (<?= Maryam\BrandAssets::MAX_REFS ?> tagacha).</p>
+    <form method="post" enctype="multipart/form-data" <?= busy_attr() ?>><?= csrf_field() ?>
+      <input type="hidden" name="action" value="ref_upload">
+      <label class="upload-btn big">📷 Rasmlarni tanlash
+        <input type="file" name="refs[]" accept="image/*" multiple hidden onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()"></label>
+      <button type="submit" hidden></button><span class="busy muted small" hidden>Yuklanmoqda…</span>
+    </form>
+    <?php $refs = Maryam\BrandAssets::refs(); if ($refs): ?>
+      <div class="ref-grid">
+        <?php foreach ($refs as $i => $name): ?>
+          <div class="ref">
+            <a href="<?= e(url(['asset' => 'ref', 'n' => $name])) ?>" target="_blank"><img src="<?= e(url(['asset' => 'ref', 'n' => $name, 'sm' => 1])) ?>" alt="Namuna" loading="lazy"></a>
+            <?php if ($i < 4): ?><span class="ref-tag">agent ko'radi</span><?php endif; ?>
+            <form method="post" onsubmit="return confirm('Namuna o\'chirilsinmi?')"><?= csrf_field() ?>
+              <input type="hidden" name="action" value="ref_delete"><input type="hidden" name="name" value="<?= e($name) ?>">
+              <button class="ref-del" title="O'chirish">×</button></form>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php else: ?>
+      <p class="small muted" style="margin-top:10px">Hali namuna yo'q.</p>
+    <?php endif; ?>
+  </div>
+</div>
+
+<h2>Tayyor rasm tizimi — grid ko'rinishi</h2>
 <?php if (!function_exists('imagecreatetruecolor')): ?>
   <div class="flash error">Serverda rasm chizish moduli (php-gd) o'rnatilmagan. Serverda o'rnatish buyrug'ini bir marta qayta
     ishga tushiring (SERVER_UZ.md) — keyin grid va tayyor rasmlar ishlaydi.</div>
 <?php endif; ?>
-<h2>Instagram grid namunasi</h2>
-<p class="small muted">Sahifangiz shunday ko'rinishi kerak: sotuv, ishonch va qamrov postlari almashinib turadi, hammasi bir xil ranglar va pastki
-  lentada. Rasmni bosing — to'liq o'lchamda yuklab olasiz (dizayner uchun namuna).</p>
+<p class="small muted">Agentlar chiqaradigan tayyor rasmlar sahifangizda shunday ko'rinadi: sotuv, ishonch va qamrov postlari almashinadi,
+  hammasi bir xil ranglar va pastki lentada (logongiz bilan). Rasmni bosing — to'liq o'lchamda yuklab olasiz.</p>
 <div class="card" style="padding:10px">
   <div class="ig-grid">
     <?php foreach ($samples as $i => [$layout, , $note]): ?>
@@ -32,31 +81,17 @@ $v = static fn () => (string) @filemtime("$dir/logo.png") . @filemtime("$dir/log
   </div>
 </div>
 
-<div class="grid2">
-  <form method="post" enctype="multipart/form-data" class="card"><?= csrf_field() ?>
-    <input type="hidden" name="action" value="brand_upload">
-    <h3>Logo</h3>
-    <p class="small muted">PNG, shaffof fonli bo'lsa eng yaxshi. Logo yuklanmaguncha rasmlarda "MARYAM" yozuvi turadi.</p>
-    <?php foreach ($logos as $key => [$label, $hint]): $has = is_file("$dir/$key.png"); ?>
-      <label><?= e($label) ?> <span class="muted">— <?= e($hint) ?></span></label>
-      <?php if ($has): ?>
-        <div class="logo-prev <?= $key === 'logo-white' ? 'dark' : '' ?>"><img src="<?= e(url(['asset' => $key, 'v' => $v()])) ?>" alt="<?= e($label) ?>"></div>
-      <?php endif; ?>
-      <input type="file" name="<?= $key === 'logo-white' ? 'logo_white' : 'logo' ?>" accept="image/png,image/jpeg,image/webp">
-    <?php endforeach; ?>
-    <div class="actions"><button type="submit">Yuklash</button></div>
-  </form>
-
-  <form method="post" class="card"><?= csrf_field() ?>
-    <input type="hidden" name="action" value="brand_colors">
-    <h3>Ranglar</h3>
-    <p class="small muted">Logotipdagi ranglar. O'zgartirsangiz, grid va barcha yangi rasmlar darhol yangilanadi.</p>
-    <?php foreach (['primary' => 'Asosiy (fon, lenta)', 'accent' => 'Urg\'u (narx, belgilar)', 'dark' => "To'q (gradient, matn)"] as $k => $label): ?>
-      <label class="color-row"><input type="color" name="<?= $k ?>" value="<?= e($colors[$k]) ?>"> <?= e($label) ?> <code><?= e($colors[$k]) ?></code></label>
-    <?php endforeach; ?>
-    <div class="actions"><button type="submit">Saqlash</button></div>
-  </form>
-</div>
+<form method="post" class="card"><?= csrf_field() ?>
+  <input type="hidden" name="action" value="brand_colors">
+  <h3>Ranglar</h3>
+  <p class="small muted">Logotipdagi ranglar. O'zgartirsangiz, grid va barcha yangi rasmlar darhol yangilanadi.</p>
+  <div class="row">
+  <?php foreach (['primary' => 'Asosiy (fon, lenta)', 'accent' => 'Urg\'u (narx, belgilar)', 'dark' => "To'q (gradient)"] as $k => $label): ?>
+    <label class="color-row"><input type="color" name="<?= $k ?>" value="<?= e($colors[$k]) ?>"> <?= e($label) ?></label>
+  <?php endforeach; ?>
+  </div>
+  <div class="actions"><button type="submit">Saqlash</button></div>
+</form>
 
 <h2>Dizayner uchun qo'llanma</h2>
 <div class="card small">
