@@ -48,7 +48,13 @@ final class Telegram
     /** Tugmali xabar; yuborilgan xabarni qaytaradi (keyin tahrirlash uchun message_id kerak). */
     public function message(string $text, ?array $markup = null): array
     {
-        $params = ['chat_id' => $this->chatId, 'text' => mb_substr($text, 0, 4096), 'disable_web_page_preview' => 'true'];
+        // Juda uzun matn bo'laklab yuboriladi (tugmalar oxirgi bo'lakda) — matn kesilib qolmasin
+        $chunks = self::splitLong($text);
+        $text = array_pop($chunks);
+        foreach ($chunks as $chunk) {
+            $this->call('sendMessage', ['chat_id' => $this->chatId, 'text' => $chunk, 'disable_web_page_preview' => 'true']);
+        }
+        $params = ['chat_id' => $this->chatId, 'text' => $text, 'disable_web_page_preview' => 'true'];
         if ($markup !== null) {
             $params['reply_markup'] = json_encode($markup, JSON_UNESCAPED_UNICODE);
         }
@@ -66,7 +72,7 @@ final class Telegram
             if ($text === null) {
                 $this->call('editMessageReplyMarkup', $params);
             } else {
-                $this->call('editMessageText', $params + ['text' => mb_substr($text, 0, 4096), 'disable_web_page_preview' => 'true']);
+                $this->call('editMessageText', $params + ['text' => self::splitLong($text)[0], 'disable_web_page_preview' => 'true']);
             }
         } catch (RuntimeException $e) {
             if (!str_contains($e->getMessage(), 'not modified')) {
@@ -175,16 +181,23 @@ final class Telegram
     }
 
     /** 4096 belgidan uzun matnni bir necha xabarga bo'ladi (so'z chegarasidan sindiradi). */
+    /** Telegram chegarasi 4096 "UTF-16 birlik" (emoji — 2 ta). Qator yoki so'z chegarasida bo'linadi. */
     private static function splitLong(string $text, int $limit = 4000): array
     {
-        if (mb_strlen($text) <= $limit) {
-            return [$text];
-        }
+        $units = static fn (string $s) => intdiv(strlen((string) mb_convert_encoding($s, 'UTF-16LE', 'UTF-8')), 2);
         $chunks = [];
-        while (mb_strlen($text) > $limit) {
-            $cut = mb_strrpos(mb_substr($text, 0, $limit), "\n") ?: $limit;
-            $chunks[] = mb_substr($text, 0, $cut);
-            $text = mb_substr($text, $cut);
+        while ($units($text) > $limit) {
+            $max = $limit;
+            while ($units(mb_substr($text, 0, $max)) > $limit) {
+                $max -= 100;
+            }
+            $head = mb_substr($text, 0, $max);
+            $cut = mb_strrpos($head, "\n");
+            if ($cut === false || $cut < $max / 2) {
+                $cut = mb_strrpos($head, ' ') ?: $max;
+            }
+            $chunks[] = rtrim(mb_substr($text, 0, $cut));
+            $text = ltrim(mb_substr($text, $cut));
         }
         $chunks[] = $text;
         return $chunks;

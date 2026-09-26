@@ -27,6 +27,9 @@ final class BrandAssets
     {
         $im = self::load($tmpPath);
         @mkdir(self::dir(), 0775, true);
+        // Atrofdagi bo'sh shaffof joy kesiladi — aks holda logo rasmda juda kichik chiqadi
+        $im = self::trimTransparent($im);
+        imagealphablending($im, false);
         imagesavealpha($im, true);
         imagepng($im, self::dir() . '/' . ($which === 'logo-white' ? 'logo-white.png' : 'logo.png'));
     }
@@ -129,29 +132,43 @@ final class BrandAssets
         }
         $total = array_sum(array_column($cands, 'n'));
 
+        // Fotodagi teri ranglari va dengiz/osmon/Instagram tugmasi ko'ki brend rangi emas — ularga og'irlik kam
+        $skin = static fn ($c) => ($c['h'] <= 45 || $c['h'] >= 350) && $c['s'] < 0.66 && $c['l'] > 0.28 && $c['l'] < 0.82;
+        $blue = static fn ($c) => $c['h'] >= 185 && $c['h'] <= 235;
+
         // Primary: ko'p uchraydigan, to'q-o'rta rang (to'q fonlar ustunlik qiladi)
-        usort($cands, static fn ($a, $b) => ($b['n'] * (1.3 - $b['l'])) <=> ($a['n'] * (1.3 - $a['l'])));
+        $pScore = static fn ($c) => $c['n'] * (1.3 - $c['l']) * ($skin($c) ? 0.1 : 1) * ($blue($c) ? 0.4 : 1);
+        usort($cands, static fn ($a, $b) => $pScore($b) <=> $pScore($a));
         $primary = $cands[0];
-        // Accent: yorqin va to'yingan, tusi primary'dan uzoq
+        if ($primary['n'] / $total < 0.08 || $primary['s'] < 0.3) {
+            // Gridda bir xil brend foni yo'q (faqat fotolar) — kompaniyaning yashil rangi
+            $primary = ['h' => 166.0, 's' => 0.75, 'l' => 0.16, 'n' => 0];
+        }
+        // Accent: yorqin va to'yingan, tusi primary'dan uzoq; oltin/sariq tuslar afzal (narx plashkasi)
         $accent = null;
         $best = 0.0;
         foreach ($cands as $c) {
             $dh = abs($c['h'] - $primary['h']);
             $dh = min($dh, 360 - $dh);
-            $score = ($c['n'] / $total) * $c['s'] * ($c['l'] > 0.35 ? 1.5 : 0.4) * ($dh >= 35 ? 1 : 0.05);
+            if ($dh < 35 || $c['l'] < 0.3 || $c['s'] < 0.3 || $skin($c)) {
+                continue;
+            }
+            $gold = $c['h'] >= 36 && $c['h'] <= 58;
+            $score = ($c['n'] / $total) * $c['s'] * ($gold ? 3 : 1) * ($blue($c) ? 0.25 : 1);
             if ($score > $best) {
                 [$best, $accent] = [$score, $c];
             }
         }
-        $accentRgb = $accent ? $accent['rgb'] : [201, 152, 47];
+        // Juda kam uchragan rang tasodifiy (bitta tugma, bitta foto) — unda brendning oltin rangi
+        $accentRgb = $accent && $accent['n'] / $total >= ($blue($accent) ? 0.05 : 0.004) ? $accent['rgb'] : [233, 196, 106];
         [$ah, $as, $al] = self::hsl(...$accentRgb);
-        $accentRgb = self::fromHsl($ah, max($as, 0.55), min(max($al, 0.5), 0.62)); // narx plashkasi yorqin bo'lsin
+        $accentRgb = self::fromHsl($ah, max($as, 0.6), min(max($al, 0.6), 0.72)); // to'q fonda yorqin ko'rinsin
 
         [$ph, $ps] = [$primary['h'], max($primary['s'], 0.35)];
         return [
-            'primary' => self::hex(self::fromHsl($ph, $ps, min($primary['l'], 0.26))),
+            'primary' => self::hex(self::fromHsl($ph, $ps, min(max($primary['l'], 0.18), 0.27))),
             'accent' => self::hex($accentRgb),
-            'dark' => self::hex(self::fromHsl($ph, $ps, 0.09)),
+            'dark' => self::hex(self::fromHsl($ph, $ps, 0.07)),
         ];
     }
 
@@ -197,6 +214,32 @@ final class BrandAssets
     private static function hex(array $rgb): string
     {
         return sprintf('#%02x%02x%02x', ...$rgb);
+    }
+
+    /** Shaffof chetlarni kesadi (ko'rinadigan piksellar chegarasi bo'yicha). */
+    private static function trimTransparent(\GdImage $im): \GdImage
+    {
+        if (!imageistruecolor($im)) {
+            imagepalettetotruecolor($im);
+        }
+        $w = imagesx($im);
+        $h = imagesy($im);
+        $step = max(1, (int) (max($w, $h) / 600)); // katta rasmda tezroq
+        [$x1, $y1, $x2, $y2] = [$w, $h, -1, -1];
+        for ($y = 0; $y < $h; $y += $step) {
+            for ($x = 0; $x < $w; $x += $step) {
+                if (((imagecolorat($im, $x, $y) >> 24) & 0x7F) < 120) {
+                    [$x1, $y1, $x2, $y2] = [min($x1, $x), min($y1, $y), max($x2, $x), max($y2, $y)];
+                }
+            }
+        }
+        if ($x2 < 0 || ($x2 - $x1) < 8 || ($y2 - $y1) < 8) {
+            return $im; // shaffof emas yoki bo'm-bo'sh
+        }
+        [$x1, $y1] = [max(0, $x1 - $step), max(0, $y1 - $step)];
+        [$x2, $y2] = [min($w - 1, $x2 + $step), min($h - 1, $y2 + $step)];
+        $out = imagecrop($im, ['x' => $x1, 'y' => $y1, 'width' => $x2 - $x1 + 1, 'height' => $y2 - $y1 + 1]);
+        return $out ?: $im;
     }
 
     private static function load(string $path): \GdImage

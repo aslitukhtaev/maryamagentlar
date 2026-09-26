@@ -78,7 +78,9 @@ final class ContentPlanner
     public function plan(DateTimeImmutable $today, string $wishes = ''): array
     {
         $settings = Marketing::settings();
-        $monday = $today->modify('monday this week');
+        // Juma-yakshanba tuzilsa — keyingi hafta rejalanadi (o'tib ketgan kunlarga post rejalanmasin)
+        $planDay = (int) $today->format('N') >= 5 ? $today->modify('next monday') : $today;
+        $monday = $planDay->modify('monday this week');
 
         $context = [
             'week' => $monday->format('Y-m-d') . ' — ' . $monday->modify('+6 days')->format('Y-m-d'),
@@ -110,7 +112,7 @@ final class ContentPlanner
         }
 
         return [
-            'week' => self::weekKey($today),
+            'week' => self::weekKey($planDay),
             'week_focus' => (string) ($data['week_focus'] ?? ''),
             'items' => array_slice($items, 0, (int) $settings['posts_per_week']),
             'missing_info' => array_values(array_map('strval', (array) ($data['missing_info'] ?? []))),

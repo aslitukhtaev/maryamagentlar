@@ -46,12 +46,16 @@ final class Trainer
         $data = Prompts::ask($this->ai, $this->store, 'trainer/rules',
             ['ratings' => $ratings, 'existing_rules' => array_values($existing)], 0.3, true, null, self::NAME, 'rules');
 
+        // Takror taklif qilinmasin: mavjud (o'chirilganlari ham) qoidalar matni bilan solishtiriladi
+        $norm = static fn (string $t) => mb_strtolower(preg_replace('/\W+/u', '', preg_replace("/\n— sabab:.*$/su", '', $t)));
+        $seen = array_flip(array_map(static fn ($r) => $norm((string) $r['content']), $this->store->rows('rules')));
         $count = 0;
         foreach ((array) ($data['rules'] ?? []) as $rule) {
             $content = trim((string) ($rule['content'] ?? ''));
-            if ($content === '') {
+            if ($content === '' || isset($seen[$norm($content)])) {
                 continue;
             }
+            $seen[$norm($content)] = true;
             $agent = in_array($rule['agent'] ?? '', self::AGENTS, true) ? $rule['agent'] : 'all';
             $reason = trim((string) ($rule['reason'] ?? ''));
             $this->store->insertRow('rules', [

@@ -9,7 +9,7 @@ $categories = ['umumiy' => 'Umumiy', 'ishonch' => 'Ishonch (tajriba, mijozlar, l
   yerga tushadi. Faqat haqiqiy va tekshirilgan narsalarni yozing.</p>
 
 <div class="card">
-  <h3>config/brand.php dagi asosiy ma'lumotlar</h3>
+  <h3>Kompaniya haqida asosiy ma'lumotlar</h3>
   <p class="small">
     <b>Telefon:</b> <?= e($brand['phone'] ?: '—') ?> · <b>Telegram:</b> <?= e($brand['telegram'] ?: '—') ?> ·
     <b>Instagram:</b> <?= e($brand['instagram'] ?: '—') ?><br><b>Manzil:</b> <?= e($brand['address'] ?: '—') ?><br>

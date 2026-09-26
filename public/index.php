@@ -47,6 +47,15 @@ if (empty($_SESSION['auth']) && isset($_GET['k'])) {
         session_regenerate_id(true);
         $_SESSION['auth'] = "telegram:$id";
         $_SESSION['tg'] = true;
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            // 30 kunlik kalit manzil satrida va tarixda qolmasin
+            $q = $_GET;
+            unset($q['k']);
+            header('Location: ?' . http_build_query($q + ['tg' => 1]), true, 302);
+            exit;
+        }
+    } else {
+        $linkExpired = true; // tg-login sahifasi parol so'rash o'rniga "botdan qayta oching" deydi
     }
 }
 
@@ -161,8 +170,11 @@ if (isset($_GET['render']) || isset($_GET['asset'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!hash_equals(csrf_token(), (string) ($_POST['csrf'] ?? ''))) {
-        http_response_code(400);
-        exit("Sahifa eskirgan — orqaga qaytib, qayta urinib ko'ring.");
+        // Fayl juda katta bo'lsa PHP butun formani tashlab yuboradi; yoki sessiya yangilangan
+        $tooBig = $_POST === [] && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0;
+        flash($tooBig ? 'Fayl juda katta — kichikroq rasm tanlang (20 MB gacha).' : "Sahifa yangilandi — yozganingiz saqlandi, qayta yuboring.", 'error');
+        $_SESSION['old'] = array_diff_key($_POST, ['csrf' => 1]);
+        redirect(url(['p' => $page] + array_intersect_key($_GET, ['id' => 1, 'name' => 1, 'brief' => 1])));
     }
     try {
         require ROOT . '/web/actions.php';

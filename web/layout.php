@@ -81,7 +81,7 @@ foreach ($sections as $key => $sec) {
   .warn { color:var(--warn); font-size:13px; margin:6px 0 0; }
   .flash { border-radius:10px; padding:12px 16px; margin-bottom:16px; background:var(--soft); border:1px solid #bcd3cb; }
   .flash.error { background:#fbeaea; border-color:#eab9b9; color:var(--err); }
-  .badge { display:inline-block; background:var(--soft); color:var(--brand); border-radius:99px; padding:1px 9px; font-size:12px; margin-right:4px; white-space:nowrap; }
+  .badge { display:inline-block; background:var(--soft); color:var(--brand); border-radius:99px; padding:1px 9px; font-size:12px; margin-right:4px; max-width:100%; overflow-wrap:anywhere; }
   .badge.gold { background:#f7eed8; color:#7a5a12; } .badge.off { background:#eee; color:#777; } .badge.new { background:#fff3cd; color:#7a5a12; }
   pre.text, pre.block { white-space:pre-wrap; word-wrap:break-word; background:#fbfaf6; border:1px solid var(--line); border-radius:8px; padding:12px 14px; font:14px/1.55 inherit; font-family:inherit; margin:8px 0 0; }
   pre.block { font-size:13px; max-height:260px; overflow:auto; }
@@ -90,7 +90,8 @@ foreach ($sections as $key => $sec) {
   .rate { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
   .rate select { width:auto; } .rate input { flex:1; min-width:200px; }
   .list-item { display:flex; gap:14px; align-items:flex-start; justify-content:space-between; }
-  .list-item > div:first-child { min-width:0; flex:1; }
+  .list-item > div:first-child { min-width:0; flex:1; overflow-wrap:anywhere; }
+  pre, .text { overflow-wrap:anywhere; }
   table { width:100%; border-collapse:collapse; } td, th { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; font-size:14px; }
   details summary { cursor:pointer; }
   .check { display:flex; align-items:center; gap:8px; font-weight:500; margin-top:14px; }
@@ -151,6 +152,8 @@ foreach ($sections as $key => $sec) {
   .color-row input { width:48px; height:36px; padding:2px; }
   .swatch { display:inline-block; width:18px; height:18px; border-radius:4px; vertical-align:middle; border:1px solid var(--line); margin-right:4px; }
   @media (max-width: 820px) {
+    .list-item { flex-direction:column; gap:8px; }
+    .list-item > div:last-child { display:flex; flex-wrap:wrap; gap:6px; }
     .wrap { grid-template-columns:minmax(0, 1fr); background:none; }
     /* Telefon: pastki panelda 5 ta bo'lim */
     aside { position:fixed; bottom:0; left:0; right:0; top:auto; z-index:20; height:auto; padding:4px 4px calc(4px + env(safe-area-inset-bottom)); }

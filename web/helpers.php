@@ -109,15 +109,23 @@ function design_view(array $design): void
             $src = e(url(['d' => $id, 's' => $i]));
             $dl = e(url(['d' => $id, 's' => $i, 'dl' => 1]));
             echo "<a href=\"$dl\" title=\"Yuklab olish\"><img src=\"$src\" alt=\"" . ($slides ? ($i + 1) . '-slayd' : 'Tayyor rasm') . "\" loading=\"lazy\">"
-               . ($slides ? '<span>' . ($i + 1) . '/' . $count . '</span>' : '') . '</a>';
+               . '</a>';
         }
         echo '</div><div class="actions">';
+        // Telegram ichidagi brauzer fayl yuklashni ko'pincha bloklaydi — rasmlarni bot chatiga yuboramiz
+        echo '<form method="post" ' . busy_attr() . '>' . csrf_field() . '<input type="hidden" name="action" value="send_tg">'
+           . '<input type="hidden" name="id" value="' . $id . '"><input type="hidden" name="return" value="' . e('?' . (string) ($_SERVER['QUERY_STRING'] ?? '')) . '">'
+           . '<button type="submit" class="primary-btn">📲 Telegramga yuborish</button><span class="busy muted small" hidden>Yuborilmoqda…</span></form>';
+        $size = ($design['format'] ?? '') === 'reels' || ($design['card_layout'] ?? '') === 'cover' ? '1080×1920' : '1080×1350';
         if ($slides && !empty($design['zip_path'])) {
-            echo '<a class="upload-btn" href="' . e(url(['d' => $id, 'zip' => 1])) . "\">⬇ Hammasini yuklab olish ($count ta slayd, ZIP)</a>";
+            echo '<a class="upload-btn" href="' . e(url(['d' => $id, 'zip' => 1])) . "\">⬇ ZIP ($count ta slayd)</a>";
         } elseif (!$slides) {
-            echo '<a class="upload-btn" href="' . e(url(['d' => $id, 's' => 0, 'dl' => 1])) . '">⬇ Yuklab olish (1080×1350)</a>';
+            echo '<a class="upload-btn" href="' . e(url(['d' => $id, 's' => 0, 'dl' => 1])) . "\">⬇ Yuklab olish ($size)</a>";
         }
         echo '</div>';
+        if ($slides) {
+            echo '<p class="small muted">Telegramga yuborilganda slaydlar tartib bilan albom bo\'lib keladi — Instagram\'ga shu tartibda joylang.</p>';
+        }
     }
     if (!empty($design['layout']) || !empty($design['image_prompt'])) {
         echo '<details class="small" style="margin-top:8px"><summary class="muted">Dizayner uchun tafsilotlar (maket, fon tavsifi)</summary>';
@@ -143,6 +151,7 @@ function delete_form(string $table, int $id, string $return, string $label = "O'
 /** Bitta tayyor matn kartochkasi: matn, vizual, ogohlantirishlar, baholash, oltin namuna, dizayn. */
 function variant_card(array $v, array $saved, string $return, ?int $briefId = null): void
 {
+    global $store;
     $text = Copywriter::variantText($v);
     ?>
     <div class="card variant" id="v<?= (int) $v['db_id'] ?>">
@@ -161,9 +170,11 @@ function variant_card(array $v, array $saved, string $return, ?int $briefId = nu
         <button type="button" class="ghost" onclick="copyText(this.closest('.card').querySelector('.text'), this)">Nusxalash</button>
         <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="golden">
           <input type="hidden" name="variant_id" value="<?= (int) $v['db_id'] ?>"><input type="hidden" name="return" value="<?= e($return) ?>">
-          <button class="ghost" title="Agentlar shu uslubda yozishni o'rganadi">Oltin namuna qilish</button></form>
+          <?php if ($store->hasHouseExample(trim($text))): ?><button class="ghost" disabled>★ Oltin namunada</button>
+          <?php else: ?><button class="ghost" title="Agentlar shu uslubda yozishni o'rganadi">Oltin namuna qilish</button><?php endif; ?></form>
         <?php if ($briefId): ?>
         <form method="post" <?= busy_attr() ?>><?= csrf_field() ?><input type="hidden" name="action" value="design">
+          <input type="hidden" name="return" value="<?= e($return) ?>">
           <input type="hidden" name="brief_id" value="<?= $briefId ?>"><input type="hidden" name="variant_id" value="<?= (int) $v['db_id'] ?>">
           <button type="submit" class="ghost">Dizayn tayyorlash</button><span class="busy muted" hidden>Dizayner ishlamoqda…</span></form>
         <?php endif; ?>
@@ -181,4 +192,19 @@ function variant_card(array $v, array $saved, string $return, ?int $briefId = nu
       </form>
     </div>
     <?php
+}
+
+/** "2026-W39" → "21–27 sentabr" (egasi uchun tushunarli hafta nomi). */
+function week_label(string $week): string
+{
+    if (!preg_match('/^(\d{4})-W(\d{2})$/', $week, $m)) {
+        return $week;
+    }
+    $months = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'];
+    $from = (new DateTimeImmutable())->setISODate((int) $m[1], (int) $m[2]);
+    $to = $from->modify('+6 days');
+    $f = static fn (DateTimeImmutable $d) => $months[(int) $d->format('n') - 1];
+    return $from->format('n') === $to->format('n')
+        ? $from->format('j') . '–' . $to->format('j') . ' ' . $f($to)
+        : $from->format('j') . ' ' . $f($from) . ' – ' . $to->format('j') . ' ' . $f($to);
 }

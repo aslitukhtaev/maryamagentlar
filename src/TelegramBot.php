@@ -110,6 +110,9 @@ final class TelegramBot
             || $this->store->plan($week) !== null) {
             return;
         }
+        if ($this->store->runningJobs() >= self::MAX_PARALLEL_JOBS) {
+            return; // bo'sh joy chiqqach keyingi aylanishda boshlanadi (hafta o'tkazib yuborilmaydi)
+        }
         $this->store->setMeta('auto_plan_week', $week);
         $tg = new Telegram($this->token, $this->ownerChatId);
         $msg = $tg->message("🗓 Yangi hafta! Kontent-reja va tayyor materiallarni tayyorlayapman (5-10 daqiqa)...");
@@ -152,10 +155,11 @@ final class TelegramBot
 
         // Kanaldan forward — avval so'raymiz (raqobatchi posti bo'lishi ham mumkin)
         if (isset($m['forward_origin']) || isset($m['forward_date'])) {
-            $this->state[$chatId] = ['await' => 'example_confirm', 'text' => $text];
-            $tg->message("Bu postni uslub namunasi qilib saqlaymi? Agentlar shu ohangda yozishni o'rganadi.", BotUi::inline([
+            // Har forward o'z savol-xabariga bog'lanadi (ketma-ket 10-20 ta forward qilinsa ham hammasi saqlanadi)
+            $ask = $tg->message("Bu postni uslub namunasi qilib saqlaymi? Agentlar shu ohangda yozishni o'rganadi.\n\n«" . mb_strimwidth($text, 0, 80, '…') . '»', BotUi::inline([
                 [["✅ Ha, saqla", 'fwd:yes'], ["❌ Yo'q", 'fwd:no']],
             ]));
+            $this->store->setMeta("fwd:$chatId:" . (int) ($ask['message_id'] ?? 0), $text);
             return;
         }
 
@@ -169,13 +173,20 @@ final class TelegramBot
                 return;
             case '/bekor':
                 $this->reset($chatId);
-                $tg->message('Bekor qilindi. Menyudan tanlang 👇', BotUi::mainKeyboard($chatId));
+                $n = $this->store->cancelJobs($chatId);
+                $tg->message(($n ? "Bekor qilindi — boshlangan $n ta ish to'xtatildi." : 'Bekor qilindi.') . ' Menyudan tanlang 👇', BotUi::mainKeyboard($chatId));
                 return;
             case '/yordam':
             case '/help':
                 $tg->message(BotUi::helpText(), BotUi::mainKeyboard($chatId));
                 return;
             case '/post':
+                $topic = trim(mb_substr($text, mb_strlen(explode(' ', $text)[0])));
+                if ($topic !== '') { // "/post Dubay" — mavzu darhol
+                    $this->state[$chatId] = ['flow' => 'post', 'topic' => $topic, 'details' => '', 'type' => '', 'await' => ''];
+                    $this->askTemplate($tg, $chatId);
+                    return;
+                }
                 $this->askTopic($tg, $chatId);
                 return;
             case '/reja':
@@ -194,10 +205,10 @@ final class TelegramBot
                 $this->recent($tg);
                 return;
             case BotUi::BTN_APP:
-                $button = BotUi::webAppButton();
+                $button = BotUi::webAppButton(chatId: $chatId);
                 $button
                     ? $tg->message("Ilova: Copywriter, Kontent-strateg, Dizayner, O'qitish studiyasi va Kompaniya ma'lumotlari.", $button)
-                    : $tg->message("Ilova manzili sozlanmagan (.env: WEBAPP_URL).", BotUi::mainKeyboard($chatId));
+                    : $tg->message("Ilova hali ulanmagan: uni bir marta brauzerda oching (server manzili), shundan keyin tugma ishlaydi.", BotUi::mainKeyboard($chatId));
                 return;
             case BotUi::BTN_HELP:
                 $tg->message(BotUi::helpText(), BotUi::mainKeyboard($chatId));
@@ -212,6 +223,10 @@ final class TelegramBot
                 $this->askTemplate($tg, $chatId);
                 return;
             case 'feedback':
+                if (mb_strlen($text) > 300) {
+                    unset($this->state[$chatId]); // bu izoh emas, yangi vazifa
+                    break;
+                }
                 $v = $this->store->variant((int) $state['variant_id']);
                 if ($v) {
                     $this->store->rate($v['db_id'], (int) ($v['rating'] ?? 3), $text);
@@ -240,7 +255,9 @@ final class TelegramBot
             $markup = BotUi::inline([[['↩️ Bekor qilish', "unk:{$d['knowledge_id']}"]]]);
         }
         if ($d['action'] === 'run_copywriter' && $d['brief']) {
-            $this->startJob($chatId, 'post', ['brief' => $d['brief'], 'template_id' => 0], $d['reply']);
+            if (!$this->startJob($chatId, 'post', ['brief' => $d['brief'], 'template_id' => 0], $d['reply'])) {
+                $this->store->saveConversationBrief($chatId, $d['brief']); // keyin "yoz" desa, brif yo'qolmagan
+            }
             return;
         }
         if ($d['action'] === 'run_plan') {
@@ -271,7 +288,8 @@ final class TelegramBot
             $rows[] = [[mb_strimwidth($t['name'], 0, 45, '…'), "tpl:{$t['id']}"]];
         }
         $rows[] = [['📋 Shablonsiz — 2 post + 2 reklama', 'tpl:0']];
-        $tg->message("Qanday formatda? Shablon — sahifangizning tasdiqlangan post turi.", BotUi::inline(array_slice($rows, -10)));
+        $noTpl = array_pop($rows);
+        $tg->message("Qanday formatda? Shablon — sahifangizning tasdiqlangan post turi.", BotUi::inline([...array_slice($rows, 0, 9), $noTpl]));
     }
 
     private function launchPost(Telegram $tg, string $chatId): void
@@ -305,7 +323,7 @@ final class TelegramBot
     {
         $rows = [];
         foreach ($this->store->recentBriefs(8) as $b) {
-            $rows[] = [["#{$b['id']} " . mb_strimwidth($b['topic'], 0, 40, '…'), "show:{$b['id']}"]];
+            $rows[] = [[mb_strimwidth($b['topic'], 0, 48, '…'), "show:{$b['id']}"]];
         }
         $tg->message($rows ? "📂 Oxirgi ishlar — qaysi birini ochay?" : "Hali ish yo'q. \"" . BotUi::BTN_POST . '" dan boshlang.', $rows ? BotUi::inline($rows) : null);
     }
@@ -325,6 +343,16 @@ final class TelegramBot
         }
         echo "→ [$chatId] (tugma) {$cb['data']}\n";
 
+        try {
+            $answer = $this->callback($tg, $chatId, $messageId, $cmd, $arg, $arg2);
+        } finally {
+            $tg->api('answerCallbackQuery', ['callback_query_id' => $cb['id'], 'text' => $answer]); // tugma aylanib qolmasin
+        }
+    }
+
+    private function callback(Telegram $tg, string $chatId, int $messageId, string $cmd, string $arg, string $arg2): string
+    {
+        $answer = '';
         switch ($cmd) {
             case 'rate':
                 $v = $this->store->variant((int) $arg);
@@ -335,14 +363,21 @@ final class TelegramBot
                     $answer = "Baho: $n ✓";
                     if ($n <= 3) {
                         $this->state[$chatId] = ['await' => 'feedback', 'variant_id' => $v['db_id']];
-                        $tg->message("Nima yoqmadi? Bir gap bilan yozing (masalan: \"juda uzun\", \"narx yo'q\") — agentlar shundan o'rganadi.\nO'tkazib yuborish: /bekor");
+                        $tg->message("Nima yoqmadi? Bir gap bilan yozing (masalan: \"juda uzun\", \"narx yo'q\") — agentlar shundan o'rganadi.", BotUi::inline([[["O'tkazib yuborish", 'skipfb']]]));
                     }
                 }
                 break;
             case 'gold':
                 $v = $this->store->variant((int) $arg);
-                if ($v) {
-                    $this->store->addHouseExample(trim(Copywriter::variantText($v)), $v['tourism_type'], (string) ($v['feedback'] ?? ''));
+                $text = $v ? trim(Copywriter::variantText($v)) : '';
+                $answer = match (true) {
+                    !$v => 'Bu matn topilmadi',
+                    $this->store->hasHouseExample($text) => 'Allaqachon oltin namunalarda ✓',
+                    (int) ($v['rating'] ?? 0) > 0 && (int) $v['rating'] < 4 => "Bu matnga {$v['rating']}★ qo'yilgan — oltin namuna faqat 4-5★ dan",
+                    default => '',
+                };
+                if ($answer === '') {
+                    $this->store->addHouseExample($text, $v['tourism_type'], (int) ($v['rating'] ?? 0) >= 4 ? (string) ($v['feedback'] ?? '') : '');
                     $answer = "🏅 Oltin namunalarga qo'shildi";
                 }
                 break;
@@ -355,9 +390,17 @@ final class TelegramBot
             case 'retry':
                 $job = $this->store->job((int) $arg);
                 if ($job && $job['status'] === 'failed') {
-                    $tg->edit($messageId, '🔁 Qayta urinilmoqda...');
-                    $this->startJob($chatId, $job['type'], ['progress_message_id' => $messageId] + $job['payload'], silent: true);
+                    if ($this->startJob($chatId, $job['type'], ['progress_message_id' => $messageId] + $job['payload'], silent: true)) {
+                        $this->store->finishJob((int) $job['id'], 'retried', (string) $job['error']);
+                        $tg->edit($messageId, '🔁 Qayta urinilmoqda...');
+                    }
+                } else {
+                    $answer = 'Bu ish allaqachon qayta boshlangan';
                 }
+                break;
+            case 'skipfb':
+                unset($this->state[$chatId]);
+                $tg->edit($messageId, 'Mayli, izohsiz saqlandi.');
                 break;
             case 'newpost':
                 $this->askTopic($tg, $chatId);
@@ -368,7 +411,7 @@ final class TelegramBot
             case 'prod':
                 $p = current(array_filter(Marketing::products(), static fn ($x) => (string) $x['id'] === $arg));
                 if ($p) {
-                    $this->state[$chatId] = ['flow' => 'post', 'topic' => (string) $p['name'], 'details' => "Katalogdagi tur: {$p['name']}", 'type' => (string) $p['type'], 'await' => ''];
+                    $this->state[$chatId] = ['flow' => 'post', 'topic' => (string) $p['name'], 'details' => "Katalogdagi tur: {$p['name']}", 'type' => isset($this->tones[$p['type'] ?? '']) ? (string) $p['type'] : '', 'await' => ''];
                     $this->askTemplate($tg, $chatId);
                 }
                 break;
@@ -394,7 +437,8 @@ final class TelegramBot
                     $this->state[$chatId] = ['await' => 'plan_wish'];
                     $tg->message("Shu hafta nimaga urg'u beramiz? Masalan: \"Vyetnam va Sharm, bitta mijoz sharhi bo'lsin\"");
                 } else {
-                    $plan = $this->store->plan(ContentPlanner::weekKey(new DateTimeImmutable('today')));
+                    $plan = $this->store->plan(ContentPlanner::weekKey(new DateTimeImmutable('today')))
+                        ?? $this->store->plan(ContentPlanner::weekKey(new DateTimeImmutable('next monday')));
                     $plan ? BotUi::deliverPlan($tg, $plan) : $tg->message("Bu hafta uchun reja hali tuzilmagan.", BotUi::inline([[['▶️ Hozir tuzish', 'plan:go']]]));
                 }
                 break;
@@ -402,13 +446,14 @@ final class TelegramBot
                 $this->showBrief($tg, (int) $arg);
                 break;
             case 'fwd':
-                $text = $this->state[$chatId]['text'] ?? '';
-                unset($this->state[$chatId]);
+                $key = "fwd:$chatId:$messageId";
+                $text = (string) $this->store->meta($key);
+                $this->store->setMeta($key, '');
                 if ($arg === 'yes' && $text !== '') {
                     $this->store->addHouseExample($text);
                     $tg->edit($messageId, "✅ Uslub namunasi qilib saqlandi. Eng yaxshi 10-20 ta postingizni shunday forward qiling.");
                 } else {
-                    $tg->edit($messageId, 'Saqlanmadi.');
+                    $tg->edit($messageId, $arg === 'yes' ? 'Bu post allaqachon saqlangan.' : 'Saqlanmadi.');
                 }
                 break;
             case 'unk':
@@ -430,7 +475,7 @@ final class TelegramBot
                     $this->freeText($tg, $chatId, $label);
                 }
         }
-        $tg->api('answerCallbackQuery', ['callback_query_id' => $cb['id'], 'text' => $answer]);
+        return $answer;
     }
 
     private function showBrief(Telegram $tg, int $briefId): void
@@ -458,17 +503,22 @@ final class TelegramBot
     }
 
     /** Uzoq ishni fon jarayonida boshlaydi; foydalanuvchiga darhol holat xabari ketadi. */
-    private function startJob(string $chatId, string $type, array $payload, string $intro = '', bool $silent = false): void
+    private function startJob(string $chatId, string $type, array $payload, string $intro = '', bool $silent = false): bool
     {
         $tg = new Telegram($this->token, $chatId);
+        if ($this->store->sameJobActive($chatId, $type, $payload)) {
+            $tg->message('⏳ Bu ish allaqachon bajarilmoqda — natija shu yerga keladi.');
+            return false;
+        }
         if ($this->store->runningJobs() >= self::MAX_PARALLEL_JOBS) {
             $tg->message("⏳ Hozir " . self::MAX_PARALLEL_JOBS . " ta ish bajarilmoqda. Ular tugagach qayta bosing.");
-            return;
+            return false;
         }
         if (!$silent || empty($payload['progress_message_id'])) {
             $intro = $intro !== '' ? $intro : ($type === 'plan' ? '🗓 Haftalik reja tuzilmoqda (5-10 daqiqa)...' : '⏳ Ishlayapman...');
             $payload['progress_message_id'] = (int) ($tg->message($intro . "\nBu vaqtda botdan foydalanishda davom etishingiz mumkin.")['message_id'] ?? 0);
         }
         BotJobs::spawn($this->store->createJob($chatId, $type, $payload));
+        return true;
     }
 }

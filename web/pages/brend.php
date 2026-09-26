@@ -13,7 +13,7 @@ $refs = BrandAssets::refs();
 $autoColors = (string) $store->meta('brand_colors_auto') !== '';
 $current = isset($_GET['show']) ? $store->resultById((int) $_GET['show']) : null;
 $designs = $store->recentDesigns(18);
-$logos = ['logo-white' => ['Oq logo', 'Rasmlardagi yashil lentada shu turadi'], 'logo' => ['Rangli logo', 'Och fonlar uchun']];
+$logos = ['logo-white' => ['Oq logo', 'Har rasmning tepasida, foto ustida turadi'], 'logo' => ['Rangli logo', 'Och fonlar uchun']];
 $v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("$dir/logo-white.png") . json_encode($colors) . json_encode($style)), 0, 8);
 $formats = ['post' => ['Post', 'Bitta rasm 1080×1350'], 'karusel' => ['Karusel', '5-8 slayd, har biri alohida rasm'], 'reels' => ['Stories / Reels', 'Muqova 1080×1920']];
 $fmt = (string) ($old['format'] ?? $_GET['format'] ?? 'post');
@@ -65,7 +65,7 @@ $fmt = (string) ($old['format'] ?? $_GET['format'] ?? 'post');
 <div class="grid2">
   <div class="card">
     <h3>Logo</h3>
-    <p class="small muted">PNG, shaffof fonli bo'lsa eng yaxshi. <b>Oq logo</b> yashil lenta va fotolar ustida ishlatiladi.</p>
+    <p class="small muted">PNG, shaffof fonli bo'lsa eng yaxshi. <b>Oq logo</b> rasmlarning tepasida (foto ustida) ishlatiladi.</p>
     <?php foreach ($logos as $key => [$label, $hint]): $has = is_file("$dir/$key.png"); ?>
       <form method="post" enctype="multipart/form-data" class="upload-row" <?= busy_attr() ?>><?= csrf_field() ?>
         <input type="hidden" name="action" value="brand_upload">
@@ -117,7 +117,8 @@ $fmt = (string) ($old['format'] ?? $_GET['format'] ?? 'post');
   <?php if (!$autoColors): ?><span class="muted">(namuna yuklanmagan — standart ranglar)</span><?php endif; ?></p>
   <?php if ($style): ?>
     <p class="small"><b>Fon:</b> <?= !empty($style['photo_background']) ? 'haqiqiy foto' : 'rangli fon' ?> ·
-      <b>Sarlavha:</b> <?= !empty($style['uppercase_titles']) ? 'KATTA HARFLAR' : 'oddiy' ?> ·
+      <b>Sarlavha:</b> <?= ($style['uppercase_titles'] ?? true) !== false ? 'KATTA HARFLAR' : 'oddiy' ?> ·
+      <b>Pastki lenta:</b> <?= !empty($style['bottom_strip']) ? 'bor' : "yo'q (logo tepada)" ?> ·
       <b>Matn:</b> <?= e($style['text_density'] ?: '—') ?> · <b>Kayfiyat:</b> <?= e($style['mood'] ?: '—') ?></p>
     <?php if ($style['notes'] !== ''): ?><p class="small muted"><?= e($style['notes']) ?></p><?php endif; ?>
   <?php endif; ?>
@@ -141,9 +142,9 @@ $fmt = (string) ($old['format'] ?? $_GET['format'] ?? 'post');
 <details class="card more-card small"><summary><b>Dizayneringiz uchun qo'llanma</b> <span class="muted">— o'lcham, shrift, ranglar</span></summary>
   <table>
     <tr><td><b>O'lcham</b></td><td>Post va karusel: 1080×1350 (4:5). Reels/Stories muqovasi: 1080×1920. Chetdan bo'sh joy: 72 px.</td></tr>
-    <tr><td><b>Shrift</b></td><td>Montserrat — sarlavha ExtraBold, matn SemiBold/Medium (Google Fonts, bepul).</td></tr>
+    <tr><td><b>Shrift</b></td><td>Sarlavha va narx — Oswald Bold, KATTA HARFLAR (tor, qalin). Matn — Montserrat SemiBold/Medium. Ikkalasi Google Fonts'da bepul.</td></tr>
     <tr><td><b>Ranglar</b></td><td><?php foreach ($colors as $hex): ?><span class="swatch" style="background:<?= e($hex) ?>"></span><code><?= e($hex) ?></code> &nbsp;<?php endforeach; ?></td></tr>
-    <tr><td><b>Pastki lenta</b></td><td>Har rasmda: asosiy rangdagi lenta (150 px), tepasida ingichka urg'u chizig'i; chapda telefon, o'ngda oq logo.</td></tr>
-    <tr><td><b>Karusel</b></td><td>1-slayd — hook va "Surib ko'ring →"; o'rtada raqamli maslahatlar; oxirgi — CTA tugmasi. O'ng yuqorida "2/7".</td></tr>
+    <tr><td><b>Kompozitsiya</b></td><td>Foto butun rasm bo'ylab, pasti qoraytirilgan; sarlavha pastda chapda, narx urg'u rangli plashkada. Tepada markazda kichik oq logo; pastda — sotuv postlarida telefon, qolganlarida Instagram manzili.</td></tr>
+    <tr><td><b>Karusel</b></td><td>1-slayd — hook va "Surib ko'ring →"; o'rtada raqamli maslahatlar; oxirgi — CTA tugmasi. O'ng yuqorida "2/7". Barcha slaydlarda bitta foto (qoraytirilgan) — karusel yaxlit ko'rinadi.</td></tr>
   </table>
 </details>

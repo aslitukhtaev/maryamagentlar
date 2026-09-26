@@ -17,3 +17,5 @@ GOOGLE_APPLICATION_CREDENTIALS
 data/sessions/
 # Web orqali yuklangan logolar (serverda saqlanadi)
 data/brand/
+# Fon ishlari xatolari
+data/jobs.log

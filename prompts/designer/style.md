@@ -10,11 +10,13 @@ chiqarish: keyin dizayner agent har bir yangi rasmni shu profil bo'yicha chizadi
 - Kayfiyat: yorqin/hayajonli, sokin/premium, informatsion?
 - Qaysi post turlari ko'p: qaynoq tur, narxlar ro'yxati, sharh, maslahat/karusel, taqqoslash, Reels muqovasi.
 - Qaytariladigan elementlar: logo joyi, lenta, ramka, belgilar.
+- Har postning pastida telefon va logo yozilgan to'liq rangli LENTA bormi (bottom_strip)? Ko'pchilik postlarda bo'lmasa — false.
 
 ## Javob formati — faqat JSON:
 {
   "photo_background": true,
-  "uppercase_titles": false,
+  "uppercase_titles": true,
+  "bottom_strip": false,
   "title_position": "past | o'rta | yuqori",
   "text_density": "kam | o'rta | ko'p",
   "mood": "bir necha so'z",

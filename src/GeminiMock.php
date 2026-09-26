@@ -23,10 +23,11 @@ class GeminiMock
     {
         $started = microtime(true);
         self::$lastImages = count($images);
+        usleep((int) ((float) getenv('AI_MOCK_DELAY') * 1e6)); // sinov: sekin AI'ni taqlid qilish
         
         // System prompt'dan agentni aniqlang
         if (str_contains($system, 'uslub tahlilchisisan')) {
-            $data = ['photo_background' => true, 'uppercase_titles' => true, 'title_position' => 'past', 'text_density' => 'kam',
+            $data = ['photo_background' => true, 'uppercase_titles' => true, 'bottom_strip' => false, 'title_position' => 'past', 'text_density' => 'kam',
                      'mood' => 'yorqin, ishonchli', 'preferred_layouts' => ['hot_tour', 'price_list', 'review'],
                      'recurring_elements' => ['pastda yashil lenta', 'oltin narx plashkasi'], 'notes' => 'Foto fon, qisqa katta sarlavha, narx doim oltin plashkada.'];
         } elseif (str_contains($system, 'QAYTA ISHLATILADIGAN SHABLON')) {
@@ -170,7 +171,7 @@ class GeminiMock
                     'angle' => "E'tiroz yechish",
                     'framework' => 'BAB',
                     'hook' => "Til muammosi, gid muammosi — yo'q bunday?",
-                    'body' => "OLDIN: Yo\'lda yolg\'on gid, til tushunmayotgan, mehmonxona xumoyali\n\nKEYIN: 14 kun tiniqlika o\'tkazasiz, ruh tinch, qalbingiz toza\n\nBIZ: O'zbek tilida gid, Makka-Madinada o'z mehmonxonalarimiz, 15 yillik tajriba",
+                    'body' => "OLDIN: Yo'lda yolg'on gid, til tushunmayotgan, mehmonxona xumoyali\n\nKEYIN: 14 kun tiniqlika o'tkazasiz, ruh tinch, qalbingiz toza\n\nBIZ: O'zbek tilida gid, Makka-Madinada o'z mehmonxonalarimiz, 15 yillik tajriba",
                     'cta' => "Erta bron chegirmasi 31-dekabrgacha — hozir qo'ng'iroq qiling",
                     'hashtags' => ['#umra', '#2027', '#ertabron'],
                     'headline' => '',
@@ -242,7 +243,7 @@ class GeminiMock
                     'angle' => "E'tiroz yechish",
                     'framework' => 'BAB',
                     'hook' => "Til muammosi — yo'q! Mehmonxona — yaxshi!",
-                    'body' => "OLDIN: Yo\'lda yolg\'on gid, til tushunmayotgan, mehmonxona xumoyali\n\nKEYIN: 14 kun tiniqlika o\'tkazasiz, ruh tinch, qalbingiz toza\n\nBIZ: O'zbek tilida gid, Makka-Madinada o'z mehmonxonalarimiz, 15 yillik tajriba",
+                    'body' => "OLDIN: Yo'lda yolg'on gid, til tushunmayotgan, mehmonxona xumoyali\n\nKEYIN: 14 kun tiniqlika o'tkazasiz, ruh tinch, qalbingiz toza\n\nBIZ: O'zbek tilida gid, Makka-Madinada o'z mehmonxonalarimiz, 15 yillik tajriba",
                     'cta' => "Erta bron chegirmasi 31-dekabrgacha — hozir qo'ng'iroq qiling",
                     'hashtags' => ['#umra', '#2027', '#ertabron'],
                     'headline' => '',

@@ -63,5 +63,5 @@ $fileCount = count(array_filter(Marketing::products(), static fn ($p) => !str_st
       </tr>
     <?php endforeach; ?>
   </table>
-  <?php if ($fileCount): ?><p class="muted small">Yana <?= $fileCount ?> ta tur config/products.php faylida.</p><?php endif; ?>
+  <?php if ($fileCount): ?><p class="muted small">Yana <?= $fileCount ?> ta doimiy tur tizimga oldindan kiritilgan (agentlar ularni ham biladi).</p><?php endif; ?>
 </div>

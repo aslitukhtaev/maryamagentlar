@@ -61,9 +61,9 @@ final class BotUi
     }
 
     /** Mini App'ni ochadigan xabar-ichi tugma (imzo bilan ochiladi). */
-    public static function webAppButton(string $text = "📱 Ilovani ochish"): ?array
+    public static function webAppButton(string $text = "📱 Ilovani ochish", string $chatId = ''): ?array
     {
-        $app = self::webAppUrl();
+        $app = self::webAppUrl($chatId);
         return $app !== '' ? ['inline_keyboard' => [[['text' => $text, 'web_app' => ['url' => $app]]]]] : null;
     }
 
@@ -154,7 +154,7 @@ final class BotUi
     {
         return "Men — Maryam Travel marketing bo'limi. Jamoam: kontent-strateg, copywriter, muharrir, dizayner.\n\n"
             . self::BTN_POST . " — tur yoki mavzu tanlaysiz, shablon tanlaysiz, 1-3 daqiqada tayyor matn keladi.\n"
-            . self::BTN_PLAN . " — haftalik kontent-reja va har kun uchun tayyor material (har dushanba 09:00 da o'zim ham yuboraman).\n"
+            . self::BTN_PLAN . " — haftalik kontent-reja va har kun uchun tayyor material" . self::autoPlanNote() . ".\n"
             . self::BTN_RECENT . " — oldingi natijalarni qayta ochish.\n"
             . self::BTN_APP . " — shablonlar, qoidalar, katalog, namunalar (agentlarni o'rgatish).\n\n"
             . "Boshqa usullar:\n"
@@ -162,5 +162,15 @@ final class BotUi
             . "• Kanalingizdagi eng yaxshi postni forward qiling — uslub namunasi qilib saqlayman\n"
             . "• Natijani baholang (5-2) — agentlar didingizni o'rganadi\n"
             . "• /bekor — boshlangan ishni bekor qilish";
+    }
+
+    private static function autoPlanNote(): string
+    {
+        $cfg = Marketing::settings()['weekly_plan'] ?? [];
+        if (!($cfg['enabled'] ?? false)) {
+            return '';
+        }
+        $days = [1 => 'dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba', 'yakshanba'];
+        return sprintf(" (har %s %02d:00 da o'zim ham yuboraman)", $days[(int) ($cfg['weekday'] ?? 1)] ?? 'dushanba', (int) ($cfg['hour'] ?? 9));
     }
 }

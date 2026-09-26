@@ -39,7 +39,7 @@ final class TelegramAuth
      * Pastki menyu (klaviatura) tugmasi Mini App'ga initData bermaydi — shuning uchun bot tugma
      * manziliga shu foydalanuvchi uchun imzolangan kalit qo'shadi (bot tokeni bilan, 30 kun).
      */
-    public static function linkToken(string $chatId, string $botToken, int $days = 30): string
+    public static function linkToken(string $chatId, string $botToken, int $days = 365): string
     {
         $exp = time() + $days * 86400;
         return "$chatId.$exp." . substr(hash_hmac('sha256', "$chatId.$exp", 'link:' . $botToken), 0, 32);

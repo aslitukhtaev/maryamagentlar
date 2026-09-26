@@ -43,8 +43,16 @@ switch ($action) {
     case 'golden':
         $v = $store->variant((int) $_POST['variant_id']);
         if ($v) {
-            $store->addHouseExample(trim(Copywriter::variantText($v)), $v['tourism_type'], (string) ($v['feedback'] ?? ''));
-            flash("Oltin namunalarga qo'shildi — agentlar endi shu uslubni o'rganadi.");
+            $text = trim(Copywriter::variantText($v));
+            if ($store->hasHouseExample($text)) {
+                flash('Bu post allaqachon oltin namunalarda.');
+            } elseif ((int) ($v['rating'] ?? 0) > 0 && (int) $v['rating'] < 4) {
+                flash("Bu postga {$v['rating']}★ qo'yilgan — oltin namuna faqat 4-5★ postlardan bo'ladi (agentlar yomon postdan o'rganmasin).", 'error');
+            } else {
+                // Izoh — egasi bahoga yozgan fikr (4-5★ da bu maqtov); bo'lmasa bo'sh
+                $store->addHouseExample($text, $v['tourism_type'], (int) ($v['rating'] ?? 0) >= 4 ? (string) ($v['feedback'] ?? '') : '');
+                flash("Oltin namunalarga qo'shildi — agentlar endi shu uslubni o'rganadi.");
+            }
         }
         redirect($back('?') . '#v' . (int) $_POST['variant_id']);
 
@@ -58,7 +66,7 @@ switch ($action) {
             'variant' => $variant,
         ]);
         flash('Dizayn tayyor — variant ostida.');
-        redirect(url(['p' => 'studio', 'brief' => $briefId]) . '#v' . (int) $_POST['variant_id']);
+        redirect($back(url(['p' => 'studio', 'brief' => $briefId])) . '#v' . (int) $_POST['variant_id']);
 
     // ---------- Dizayner (mustaqil) ----------
     case 'design_free':
@@ -68,7 +76,7 @@ switch ($action) {
         }
         $format = in_array($_POST['format'] ?? '', ['post', 'karusel', 'reels'], true) ? $_POST['format'] : 'post';
         $firstLine = trim((string) strtok($text, "\n"));
-        $type = preg_match('/umra|haj|makka|madina/iu', $text) ? 'umra' : 'outbound';
+        $type = preg_match('/\\b(umra|haj|makka|madinaga|madinada|ziyorat)/iu', $text) ? 'umra' : 'outbound';
         $brief = Brief::normalize(['topic' => mb_strimwidth($firstLine, 0, 80, '…'), 'tourism_type' => $type, 'details' => $text], $tones);
         $brief['id'] = $store->saveBrief($brief);
         $design = (new GraphicDesigner($ai, $store, $brand, $tones))->run($brief, [], ['format' => $format, 'text' => $text, 'kind' => 'free']);
@@ -106,6 +114,7 @@ switch ($action) {
             // Tasdiqlanganda O'qituvchi yozgan "sabab" izohi qoidadan olib tashlanadi
             $content = $status === 'active' ? preg_replace("/\n— sabab:.*$/s", '', $rule['content']) : $rule['content'];
             $store->updateRow('rules', (int) $rule['id'], ['status' => $status, 'content' => $content]);
+            flash($status === 'active' ? 'Qoida tasdiqlandi — agentlar endi unga amal qiladi.' : "Qoida o'chirildi.");
         }
         redirect(url(['p' => 'qoidalar']));
 
@@ -182,17 +191,25 @@ switch ($action) {
         flash($styleError ?? 'Uslub qayta tahlil qilindi.', $styleError ? 'error' : 'ok');
         redirect(url(['p' => 'brend']));
 
-    case 'brand_colors':
-        $colors = [];
-        foreach (['primary', 'accent', 'dark'] as $k) {
-            $v = (string) ($_POST[$k] ?? '');
-            if (preg_match('/^#[0-9a-fA-F]{6}$/', $v)) {
-                $colors[$k] = strtolower($v);
-            }
+    case 'send_tg':
+        // Rasm(lar)ni bot chatiga yuborish: Telegram ichida brauzer orqali yuklab olish ishonchsiz
+        $design = $store->resultById((int) $_POST['id']);
+        $files = array_values(array_filter(($design['slides'] ?? []) ?: [$design['card_path'] ?? null], 'is_string'));
+        $files = array_values(array_filter($files, 'is_file'));
+        $token = (string) Maryam\Env::get('TELEGRAM_BOT_TOKEN', '');
+        $auth = (string) ($_SESSION['auth'] ?? '');
+        $chat = str_starts_with($auth, 'telegram:') ? substr($auth, 9) : (Maryam\TelegramAuth::allowedIds()[0] ?? '');
+        if (!$files || $token === '' || $chat === '') {
+            throw new RuntimeException($files ? 'Telegram bot sozlanmagan.' : 'Rasm topilmadi.');
         }
-        $store->setMeta('brand_colors', json_encode($colors));
-        flash('Ranglar saqlandi.');
-        redirect(url(['p' => 'brend']));
+        $tg = new Maryam\Telegram($token, (string) $chat);
+        if (count($files) >= 2) {
+            $tg->sendMediaGroup(array_slice($files, 0, 10), '🎨 Karusel: ' . count($files) . " ta slayd. Instagram'ga shu tartibda joylang.");
+        } else {
+            $tg->sendDocument($files[0], '🎨 Tayyor rasm — Instagram\'ga joylang');
+        }
+        flash("Botga yuborildi — Telegram chatini oching.");
+        redirect($back(url(['p' => 'brend'])));
 
     // ---------- Umumiy saqlash / o'chirish ----------
     case 'save':
@@ -201,6 +218,11 @@ switch ($action) {
             throw new InvalidArgumentException("Noma'lum jadval.");
         }
         $data = array_map(static fn ($v) => is_string($v) ? str_replace("\r\n", "\n", trim($v)) : $v, $_POST);
+        foreach ($data as $k => $v) {
+            if (is_string($v) && mb_strlen($v) > 8000) {
+                throw new InvalidArgumentException('Matn juda uzun (8000 belgigacha) — qisqartiring yoki bir necha qismga bo\'ling.');
+            }
+        }
         if (in_array('active', Store::EDITABLE[$table], true)) {
             $data['active'] = isset($_POST['active']) ? 1 : 0;
         }

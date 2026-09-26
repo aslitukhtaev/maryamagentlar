@@ -50,7 +50,8 @@ final class GraphicDesigner
         $data = Prompts::ask($ai, $store, 'designer/style', ['namunalar_soni' => count($refs)], 0.2, true, null, self::NAME, 'style', $refs);
         $style = [
             'photo_background' => (bool) ($data['photo_background'] ?? true),
-            'uppercase_titles' => (bool) ($data['uppercase_titles'] ?? false),
+            'uppercase_titles' => (bool) ($data['uppercase_titles'] ?? true),
+            'bottom_strip' => (bool) ($data['bottom_strip'] ?? false),
             'title_position' => (string) ($data['title_position'] ?? ''),
             'text_density' => (string) ($data['text_density'] ?? ''),
             'mood' => (string) ($data['mood'] ?? ''),
@@ -155,7 +156,9 @@ final class GraphicDesigner
         try {
             $slides = $format === 'karusel' ? $this->carouselSlides($card, $options) : [];
             if (count($slides) >= 2) {
-                $slides[0]['bg'] ??= $imagePath; // foto faqat muqovada — qolganlari bir xil brend fonida
+                foreach ($slides as $k => $slide) {
+                    $slides[$k]['bg'] ??= $imagePath; // bitta foto barcha slaydlarda (qoraytirilgan) — karusel yaxlit ko'rinadi
+                }
                 foreach ($renderer->renderCarousel($slides, $colors) as $i => $png) {
                     $slidePaths[] = $path = "$dir/post$suffix-s" . ($i + 1) . '.png';
                     file_put_contents($path, $png);
@@ -195,15 +198,23 @@ final class GraphicDesigner
         return $result;
     }
 
-    /** Karusel slaydlari: AI bergan "slides", bo'lmasa copywriter/foydalanuvchi matnidagi "1-slayd: ..." qatorlari. */
+    /**
+     * Karusel slaydlari. Foydalanuvchi o'zi "1-slayd: ..., 2-slayd: ..." deb yozgan bo'lsa — aynan shu matn
+     * (egasining so'zi ustun), aks holda AI bergan "slides", u ham bo'lmasa copywriter vizual rejasidagi qatorlar.
+     */
     private function carouselSlides(array $card, array $options): array
     {
-        $slides = array_values(array_filter((array) ($card['slides'] ?? []), static fn ($x) => is_array($x) && !empty($x['title'])));
+        $cta = (string) (($options['variant']['cta'] ?? '') ?: ($card['cta'] ?? ''));
+        $own = PostRenderer::slidesFromText((string) ($options['text'] ?? ''), $cta);
+        if (count($own) >= 2) {
+            return array_slice($own, 0, 10);
+        }
+        $filled = static fn ($x) => is_array($x) && array_filter(array_intersect_key($x, array_flip(['title', 'quote', 'lines', 'left', 'text'])));
+        $slides = array_values(array_filter((array) ($card['slides'] ?? []), $filled));
         if (count($slides) >= 2) {
             return array_slice($slides, 0, 10);
         }
-        $text = (string) (($options['variant']['visual'] ?? '') ?: ($options['text'] ?? ''));
-        return PostRenderer::slidesFromText($text, (string) ($options['variant']['cta'] ?? $card['cta'] ?? ''));
+        return array_slice(PostRenderer::slidesFromText((string) ($options['variant']['visual'] ?? ''), $cta), 0, 10);
     }
 
     /** Slaydlarni bitta ZIP ga (bir bosishda yuklab olish uchun). */

@@ -89,7 +89,10 @@ final class Copywriter
         $variants = array_map([$this, 'normalizeVariant'], $draft['variants'] ?? []);
         if ($format !== null) {
             // Reja bandi / shablon: bitta tayyor material kerak (AI ko'proq qaytarsa ham)
-            $variants = array_slice($variants, 0, 1);
+            // Reklama shabloni — reklama varianti (sarlavha/tavsif/tugma bilan), boshqasi — oddiy post
+            $wantAd = $format === 'reklama';
+            $match = array_values(array_filter($variants, static fn ($v) => ($v['kind'] === 'ad') === $wantAd));
+            $variants = array_slice($match ?: $variants, 0, 1);
         }
 
         // 3-bosqich: tahrir. Birinchi raundda hammasi, keyingisida faqat muammolilari.

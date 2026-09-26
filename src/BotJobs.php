@@ -35,7 +35,8 @@ final class BotJobs
         if (PHP_OS_FAMILY === 'Windows') {
             pclose(popen('start /B "" ' . escapeshellarg($php) . ' ' . escapeshellarg($script) . " $jobId", 'r'));
         } else {
-            exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' ' . $jobId . ' > /dev/null 2>&1 &');
+            // Xatolar izsiz yo'qolmasin: data/jobs.log
+            exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' ' . $jobId . ' >> ' . escapeshellarg(ROOT . '/data/jobs.log') . ' 2>&1 &');
         }
     }
 
@@ -51,7 +52,9 @@ final class BotJobs
         $progressId = (int) ($p['progress_message_id'] ?? 0) ?: (int) ($tg->message('⏳ Boshlanmoqda...')['message_id'] ?? 0);
 
         $last = 0.0;
+        $this->jobId = $jobId;
         $progress = function (string $text) use ($tg, $progressId, &$last) {
+            $this->assertActive();
             if (microtime(true) - $last < 2.5) {
                 return; // Telegram tahrirlash limitiga tushmaslik uchun
             }
@@ -73,9 +76,23 @@ final class BotJobs
             };
             $this->store->finishJob($jobId, 'done');
             $tg->edit($progressId, "✅ $done");
+        } catch (JobCancelled) {
+            $tg->edit($progressId, '⏹ Bekor qilindi.');
         } catch (Throwable $e) {
             $this->store->finishJob($jobId, 'failed', $e->getMessage());
-            $tg->edit($progressId, '⚠ ' . BotUi::friendlyError($e), BotUi::inline([[['🔁 Qayta urinish', "retry:$jobId"]]]));
+            // "topilmadi" — qayta urinish yordam bermaydi, tugma ko'rsatilmaydi
+            $retry = str_contains($e->getMessage(), 'topilmadi') ? null : BotUi::inline([[['🔁 Qayta urinish', "retry:$jobId"]]]);
+            $tg->edit($progressId, '⚠ ' . BotUi::friendlyError($e), $retry);
+        }
+    }
+
+    private int $jobId = 0;
+
+    /** /bekor bosilgan bo'lsa ish shu joyda to'xtaydi va natija yuborilmaydi. */
+    private function assertActive(): void
+    {
+        if ($this->jobId && ($this->store->job($this->jobId)['status'] ?? '') === 'cancelled') {
+            throw new JobCancelled();
         }
     }
 
@@ -84,6 +101,7 @@ final class BotJobs
         $brief['id'] = $this->store->saveBrief($brief);
         $result = (new Copywriter($this->ai, $this->store, $this->brand, $this->tones))
             ->run($brief, ['progress' => $progress] + ($templateId ? ['template_id' => $templateId] : []));
+        $this->assertActive();
         BotUi::deliverResult($tg, $result, $brief);
         return "Yozildi: {$brief['topic']}";
     }
@@ -94,6 +112,7 @@ final class BotJobs
         $prev = $this->store->result($briefId, Copywriter::NAME, 'final') ?? [];
         $result = (new Copywriter($this->ai, $this->store, $this->brand, $this->tones))
             ->run($brief, ['progress' => $progress] + (!empty($prev['template_id']) ? ['template_id' => (int) $prev['template_id']] : []));
+        $this->assertActive();
         BotUi::deliverResult($tg, $result, $brief);
         return "Qayta yozildi: {$brief['topic']}";
     }
@@ -102,10 +121,11 @@ final class BotJobs
     {
         $plan = (new ContentPlanner($this->ai, $this->store, $this->brand, $this->tones))
             ->run(new DateTimeImmutable('today'), ['wishes' => $wishes, 'progress' => $progress]);
-        BotUi::deliverPlan($tg, $plan);
+        $this->assertActive();
         $meta = ['topic' => 'haftalik-reja-' . $plan['week'], 'id' => 0];
         $path = Output::save($meta, 'kontent-paket.txt', ContentPlanner::toText($plan));
         $tg->sendDocument($path, '📦 Butun paket bitta faylda (arxiv uchun)');
+        BotUi::deliverPlan($tg, $plan); // tugmali yakuniy xabar eng pastda qolsin
         return "Haftalik reja tayyor ({$plan['week']})";
     }
 
@@ -119,6 +139,7 @@ final class BotJobs
             'template_id' => $result['template_id'] ?? null,
             'variant' => $variant,
         ]);
+        $this->assertActive();
         if (!empty($design['slides']) && count($design['slides']) >= 2) {
             $tg->sendMediaGroup($design['slides'], '🎨 Karusel: ' . count($design['slides']) . " ta slayd (1080×1350). Instagram'ga shu tartibda joylang.");
         } elseif (!empty($design['card_path'])) {
@@ -138,4 +159,9 @@ final class BotJobs
         $tg->message($text);
         return 'Dizayn tayyor';
     }
+}
+
+/** /bekor bilan to'xtatilgan ish. */
+final class JobCancelled extends \RuntimeException
+{
 }

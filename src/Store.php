@@ -148,6 +148,13 @@ final class Store
             ->execute([$tourismType, $content, $note]);
     }
 
+    public function hasHouseExample(string $content): bool
+    {
+        $st = $this->db->prepare('SELECT 1 FROM house_examples WHERE content = ? LIMIT 1');
+        $st->execute([$content]);
+        return (bool) $st->fetchColumn();
+    }
+
     /** Shu yo'nalish bo'yicha va umumiy namunalar, eng yangilari birinchi. */
     public function houseExamples(string $tourismType, int $limit = 5): array
     {
@@ -395,8 +402,35 @@ final class Store
 
     public function finishJob(int $id, string $status, string $error = ''): void
     {
-        $this->db->prepare("UPDATE jobs SET status = ?, error = ?, finished_at = datetime('now', 'localtime') WHERE id = ?")
+        // /bekor bilan to'xtatilgan ish "bajarildi" deb qayta yozilmaydi
+        $this->db->prepare("UPDATE jobs SET status = ?, error = ?, finished_at = datetime('now', 'localtime') WHERE id = ? AND status != 'cancelled'")
             ->execute([$status, $error, $id]);
+    }
+
+    /** Xuddi shu ish (bir xil turi va ma'lumoti) hozir bajarilayaptimi — ikki marta bosilganda takrorlanmasin. */
+    public function sameJobActive(string $chatId, string $type, array $payload): bool
+    {
+        unset($payload['progress_message_id']);
+        $st = $this->db->prepare("SELECT payload FROM jobs WHERE chat_id = ? AND type = ? AND status IN ('queued', 'running')
+                                  AND created_at > datetime('now', 'localtime', '-30 minutes')");
+        $st->execute([$chatId, $type]);
+        foreach ($st->fetchAll() as $row) {
+            $p = json_decode($row['payload'], true) ?: [];
+            unset($p['progress_message_id']);
+            if ($p == $payload) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** /bekor: shu chatdagi boshlangan ishlar to'xtatiladi (fon jarayoni natijani yubormaydi). */
+    public function cancelJobs(string $chatId): int
+    {
+        $st = $this->db->prepare("UPDATE jobs SET status = 'cancelled', finished_at = datetime('now', 'localtime')
+                                  WHERE chat_id = ? AND status IN ('queued', 'running')");
+        $st->execute([$chatId]);
+        return $st->rowCount();
     }
 
     public function startJob(int $id): void
