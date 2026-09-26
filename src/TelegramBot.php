@@ -398,6 +398,16 @@ final class TelegramBot
                     $answer = 'Bu ish allaqachon qayta boshlangan';
                 }
                 break;
+            case 'pick':
+                // Dizayn varianti tanlandi — sifat yo'qolmasin deb fayl sifatida
+                try {
+                    $d = (new Agents\GraphicDesigner($this->ai, $this->store, $this->brand, $this->tones))->choose((int) $arg, (int) $arg2);
+                    $tg->sendDocument($d['card_path'], '✅ ' . ((int) $arg2 + 1) . "-variant — Instagram'ga joylang (1080×" . (($d['format'] ?? '') === 'reels' ? '1920' : '1350') . ')');
+                    $answer = 'Tanlandi ✓';
+                } catch (Throwable) {
+                    $answer = 'Bu dizayn topilmadi';
+                }
+                break;
             case 'skipfb':
                 unset($this->state[$chatId]);
                 $tg->edit($messageId, 'Mayli, izohsiz saqlandi.');

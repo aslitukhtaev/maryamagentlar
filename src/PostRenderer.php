@@ -211,6 +211,44 @@ final class PostRenderer
         return (string) ob_get_clean();
     }
 
+    /**
+     * AI chizgan tayyor rasmni yakunlaydi: aniq o'lcham (1080×1350 yoki 1080×1920), tepada haqiqiy logo,
+     * pastda telefon/Instagram (AI bularni buzib yozadi — shuning uchun kod qo'yadi). JPEG qaytaradi.
+     */
+    public function finishPoster(string $imageBytes, string $format, string $bottomText, array $colors): string
+    {
+        $src = @imagecreatefromstring($imageBytes);
+        if (!$src) {
+            throw new InvalidArgumentException('AI rasmi o‘qilmadi.');
+        }
+        [$this->w, $this->h] = $format === 'reels' ? [1080, 1920] : [1080, 1350];
+        $this->layout = 'poster';
+        $this->img = imagecreatetruecolor($this->w, $this->h);
+        imagealphablending($this->img, true);
+        foreach ($colors + ['light' => '#ffffff'] as $k => $hex) {
+            $this->c[$k] = self::rgb($hex);
+        }
+        $sw = imagesx($src);
+        $sh = imagesy($src);
+        $scale = max($this->w / $sw, $this->h / $sh);
+        $cw = (int) ($this->w / $scale);
+        $ch = (int) ($this->h / $scale);
+        imagecopyresampled($this->img, $src, 0, 0, (int) (($sw - $cw) / 2), (int) (($sh - $ch) / 2), $this->w, $this->h, $cw, $ch);
+        // Logo va yozuv har qanday fonda o'qilsin — yengil soya
+        $this->gradient(0, 150, $this->c['dark'], 60, 127);
+        $this->gradient($this->h - 130, $this->h, $this->c['dark'], 127, 40);
+        $this->logo((int) ($this->w / 2), 58, 'center', 60, 180);
+        $line = $this->clean($bottomText);
+        if ($line !== '') {
+            $f = $this->fit($line, 'SemiBold', 30, 22, $this->w - 2 * self::M, 1);
+            $lw = $this->width($f['lines'][0], 'SemiBold', $f['size']);
+            $this->text($f['lines'][0], 'SemiBold', $f['size'], (int) (($this->w - $lw) / 2), $this->h - 40, $this->c['light']);
+        }
+        ob_start();
+        imagejpeg($this->img, null, 92);
+        return (string) ob_get_clean();
+    }
+
     // ==================== TARTIBLAR ====================
 
     private function layoutHotTour(array $d): void

@@ -140,7 +140,19 @@ final class BotJobs
             'variant' => $variant,
         ]);
         $this->assertActive();
-        if (!empty($design['slides']) && count($design['slides']) >= 2) {
+        if (!empty($design['variants']) && count($design['variants']) >= 2) {
+            // AI variantlar: albom (ko'rish uchun) + qaysi biri tanlanishini so'raymiz
+            $n = count($design['variants']);
+            $tg->sendMediaGroup(array_column($design['variants'], 'path'), "🎨 $n ta variant: " . ($brief['topic'] ?? ''), 'photo');
+            $notes = [];
+            foreach ($design['variants'] as $i => $v) {
+                $ok = $v['check']['ok'] ?? null;
+                $notes[] = ($i + 1) . '. ' . $v['concept'] . ($ok === false ? ' — ⚠ ' . ($v['check']['issues'] ?: 'yozuvda xato bo\'lishi mumkin') : ($ok ? ' ✓' : ''));
+            }
+            $buttons = array_map(static fn ($i) => [($i + 1) . '-ni tanlash', "pick:{$design['result_id']}:$i"], array_keys($design['variants']));
+            $tg->message("Qaysi biri yoqdi? Tanlanganini sifatli fayl qilib yuboraman.\n\n" . implode("\n", $notes)
+                . "\n\nTuzatish kerak bo'lsa — ilovadagi Dizayner bo'limida \"✏️ Tuzatish\".", BotUi::inline(array_chunk($buttons, 2)));
+        } elseif (!empty($design['slides']) && count($design['slides']) >= 2) {
             $tg->sendMediaGroup($design['slides'], '🎨 Karusel: ' . count($design['slides']) . " ta slayd (1080×1350). Instagram'ga shu tartibda joylang.");
         } elseif (!empty($design['card_path'])) {
             // Brend uslubidagi tayyor rasm — to'g'ridan-to'g'ri Instagram'ga

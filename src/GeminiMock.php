@@ -19,6 +19,51 @@ class GeminiMock
     /** Oxirgi so'rovga ilova qilingan rasmlar soni (testlar uchun). */
     public static int $lastImages = 0;
 
+    /** @var array<int, array> sinov uchun: oxirgi rasm so'rovlari (prompt, rasm soni, format) */
+    public static array $imageJobs = [];
+
+    /**
+     * Soxta rasm chizish: so'ralgan matn yozilgan oddiy afisha (haqiqiy AI'siz butun jarayonni sinash uchun).
+     * AI_MOCK_IMAGES=0 bo'lsa — rasm modeli yo'qdek xato qaytaradi (zaxira shablonni sinash).
+     */
+    public function generateImages(array $jobs): array
+    {
+        usleep((int) ((float) getenv('AI_MOCK_DELAY') * 1e6));
+        $out = [];
+        foreach ($jobs as $i => $job) {
+            self::$imageJobs[] = ['prompt' => $job['prompt'], 'images' => count($job['images'] ?? []), 'aspect' => $job['aspect'] ?? '4:5'];
+            if (getenv('AI_MOCK_IMAGES') === '0') {
+                $out[$i] = 'Vertex AI xatosi (404) [mock]: model not found';
+                continue;
+            }
+            [$w, $h] = ($job['aspect'] ?? '4:5') === '9:16' ? [768, 1365] : [928, 1160];
+            $im = imagecreatetruecolor($w, $h);
+            $hue = crc32($job['prompt'] . $i) % 360;
+            for ($y = 0; $y < $h; $y++) {
+                $t = $y / $h;
+                imageline($im, 0, $y, $w, $y, imagecolorallocate($im, (int) (20 + 60 * $t), (int) (60 + ($hue % 120) * (1 - $t)), (int) (50 + ($hue % 90))));
+            }
+            $font = ROOT . '/resources/fonts/Oswald-Bold.ttf';
+            preg_match('/Headline: "([^"]*)"/u', $job['prompt'], $m);
+            $head = mb_strtoupper($m[1] ?? 'MOCK');
+            $y = (int) ($h * 0.45);
+            foreach (explode("\n", wordwrap($head, 14, "\n", true)) as $line) {
+                imagettftext($im, 64, 0, 50, $y, imagecolorallocate($im, 255, 255, 255), $font, $line);
+                $y += 90;
+            }
+            if (preg_match('/Price badge: "([^"]+)"/u', $job['prompt'], $pm)) {
+                imagefilledrectangle($im, 50, $y + 10, 50 + 40 * mb_strlen($pm[1]), $y + 100, imagecolorallocate($im, 233, 196, 106));
+                imagettftext($im, 50, 0, 70, $y + 80, imagecolorallocate($im, 10, 40, 30), $font, $pm[1]);
+            }
+            $tag = (str_starts_with($job['prompt'], 'Edit') ? 'TUZATILGAN · ' : '') . 'MOCK #' . ($i + 1) . ' · ' . count($job['images'] ?? []) . ' rasm';
+            imagettftext($im, 26, 0, 50, $h - 160, imagecolorallocate($im, 255, 230, 150), $font, $tag);
+            ob_start();
+            imagepng($im);
+            $out[$i] = ['base64' => base64_encode((string) ob_get_clean()), 'mime_type' => 'image/png', 'model_used' => 'mock-image'];
+        }
+        return $out;
+    }
+
     public function json(string $system, string $user, float $temperature = 0.8, bool $smart = false, array $images = []): array
     {
         $started = microtime(true);
@@ -34,21 +79,28 @@ class GeminiMock
             $data = $this->mockTemplate();
         } elseif (str_contains($system, "O'QITUVCHISI")) {
             $data = $this->mockRules();
-        } elseif (str_contains($system, 'grafik dizaynerisan')) {
-            $data = [
-                'layout' => ['1080x1350', "Sarlavha (yuqori 1/3, oq, qalin): ISTANBUL", "Narx plashkasi (pastki chap, oltin): 775$ dan", "Pastki lenta (to'q yashil): 55-303-22-22 · logotip"],
-                'image_prompt' => 'Galata tower at golden hour, Istanbul rooftops, clean negative space at the top third, no text, no watermark, no typography',
-                'card' => str_contains($user, '"deliverable_format": "karusel"')
-                    ? ['layout' => 'carousel', 'slides' => [
-                        ['layout' => 'slide_cover', 'title' => 'Istanbulga borishdan oldin bilishingiz kerak bo‘lgan 4 narsa', 'label' => 'ISTANBUL'],
-                        ['layout' => 'tips', 'title' => 'Viza kerak emas', 'text' => "O‘zbekiston fuqarolari 30 kungacha vizasiz."],
-                        ['layout' => 'tips', 'title' => 'Istanbulkart oling', 'text' => 'Metro, tramvay va paromlarda bitta karta.'],
-                        ['layout' => 'hot_tour', 'title' => 'Istanbul', 'subtitle' => 'Har kuni uchish · 5 kun', 'price' => '775$ dan'],
-                        ['layout' => 'slide_cta', 'title' => 'Tur tanlashda yordam kerakmi?', 'text' => "Direct'ga yozing — 10 daqiqada javob", 'button' => "Direct'ga ISTANBUL deb yozing"],
-                    ]]
-                    : ['layout' => str_contains($user, '"deliverable_format": "reels"') ? 'cover' : 'hot_tour', 'title' => 'Istanbul', 'subtitle' => 'Har kuni uchish · 5 kun · nonushta', 'price' => '775$ dan', 'label' => 'QAYNOQ TUR', 'cta' => "Direct'ga ISTANBUL deb yozing"],
-                'alt_text' => "Istanbul, Galata minorasi oqshom yorug'ida",
+        } elseif (str_contains($system, 'afisha dizaynerisan')) {
+            $concepts = [
+                ['name' => 'Sayohatchi va Galata', 'prompt' => 'Happy traveller in the foreground, Galata tower at golden hour behind, huge white condensed headline'],
+                ['name' => 'Bosfor manzarasi', 'prompt' => 'Full-bleed Bosphorus photo, bold headline, gold price badge bottom-left'],
+                ['name' => 'Kollaj', 'prompt' => 'Collage of three Istanbul photos with flag stickers and arrows'],
+                ['name' => 'Tipografik', 'prompt' => 'Deep green background, giant gold typography, minimal icons'],
             ];
+            $data = str_contains($user, '"deliverable_format": "karusel"')
+                ? ['headline' => 'ISTANBULGA BORISHDAN OLDIN', 'subline' => '4 ta maslahat', 'price' => '', 'badge' => '', 'concepts' => [$concepts[0]],
+                   'slides' => [
+                       ['headline' => 'Istanbulga borishdan oldin 4 narsa', 'subline' => 'Surib ko‘ring', 'prompt' => 'Cover with traveller and Galata tower'],
+                       ['headline' => 'Viza kerak emas', 'subline' => '30 kungacha vizasiz', 'prompt' => 'Passport and boarding pass close-up'],
+                       ['headline' => 'Istanbulkart oling', 'subline' => 'Metro, tramvay, parom', 'prompt' => 'Tram on Istiklal street'],
+                       ['headline' => "Direct'ga ISTANBUL deb yozing", 'subline' => '10 daqiqada javob', 'prompt' => 'Smiling manager with phone'],
+                   ], 'alt_text' => 'Istanbul haqida karusel']
+                : ['headline' => 'ISTANBUL 775$ DAN', 'subline' => 'Har kuni uchish · 5 kun', 'price' => '775$ dan', 'badge' => 'QAYNOQ TUR',
+                   'concepts' => $concepts, 'slides' => [], 'alt_text' => "Istanbul, Galata minorasi oqshom yorug'ida"];
+        } elseif (str_contains($system, 'matn tekshiruvchisisan')) {
+            // Sinov: ikkinchi rasmda xato bor deb ko'rsatamiz (UI dagi ogohlantirishni tekshirish uchun)
+            $data = ['results' => array_map(static fn ($i) => $i === 1
+                ? ['index' => 1, 'ok' => false, 'found' => 'ISTANBLU 775$ DAN', 'issues' => "ISTANBUL o'rniga ISTANBLU yozilgan", 'fix' => 'Change the headline to exactly "ISTANBUL 775$ DAN"']
+                : ['index' => $i, 'ok' => true, 'found' => 'ISTANBUL 775$ DAN', 'issues' => '', 'fix' => ''], range(0, max(0, count($images) - 1)))];
         } elseif (str_contains($system, "bo'limining boshlig'isan")) {
             $data = ['action' => 'chat', 'reply' => 'Mock javob', 'ask_field' => '', 'brief' => [], 'knowledge' => []];
         } elseif (str_contains($system, 'kontent-strategisan')) {

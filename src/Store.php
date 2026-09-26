@@ -51,6 +51,13 @@ final class Store
         return (int) $this->db->lastInsertId();
     }
 
+    /** Natijani yangilash (dizaynda variant tanlash, tuzatilgan rasm qo'shish). */
+    public function updateResult(int $id, array $data): void
+    {
+        unset($data['id'], $data['kind']);
+        $this->db->prepare('UPDATE agent_results SET data = ? WHERE id = ?')->execute([json_encode($data, JSON_UNESCAPED_UNICODE), $id]);
+    }
+
     /** Eng oxirgi natija (id bilan) — masalan variant dizayni. */
     public function latestResultRow(int $briefId, string $agent, string $kind): ?array
     {

@@ -79,8 +79,16 @@ switch ($action) {
         $type = preg_match('/\\b(umra|haj|makka|madinaga|madinada|ziyorat)/iu', $text) ? 'umra' : 'outbound';
         $brief = Brief::normalize(['topic' => mb_strimwidth($firstLine, 0, 80, '…'), 'tourism_type' => $type, 'details' => $text], $tones);
         $brief['id'] = $store->saveBrief($brief);
-        $design = (new GraphicDesigner($ai, $store, $brand, $tones))->run($brief, [], ['format' => $format, 'text' => $text, 'kind' => 'free']);
-        flash(!empty($design['card_path']) ? 'Tayyor! Rasmni bosing — yuklab olinadi.' : "Rasm chizilmadi — tafsilotlarni pastda ko'ring.", !empty($design['card_path']) ? 'ok' : 'error');
+        // Jamoa fotolari: yangi yuklanganlar kutubxonaga saqlanadi + kutubxonadan belgilanganlar
+        $photos = array_values(array_filter(array_map('strval', (array) ($_POST['photo_pick'] ?? []))));
+        foreach (uploaded_images('photos') as $tmp) {
+            $photos[] = Maryam\BrandAssets::addPhoto($tmp);
+        }
+        $design = (new GraphicDesigner($ai, $store, $brand, $tones))->run($brief, [], [
+            'format' => $format, 'text' => $text, 'kind' => 'free', 'photos' => array_slice(array_unique($photos), 0, 3),
+        ]);
+        $ok = !empty($design['card_path']);
+        flash(!$ok ? "Rasm chizilmadi — tafsilotlarni pastda ko'ring." : (!empty($design['variants']) ? count($design['variants']) . " ta variant tayyor — eng yoqqanini tanlang." : 'Tayyor!'), $ok ? 'ok' : 'error');
         redirect(url(['p' => 'brend', 'show' => $design['result_id']]) . '#natija');
 
     // ---------- Haftalik reja ----------
@@ -191,10 +199,39 @@ switch ($action) {
         flash($styleError ?? 'Uslub qayta tahlil qilindi.', $styleError ? 'error' : 'ok');
         redirect(url(['p' => 'brend']));
 
+    case 'design_pick':
+        (new GraphicDesigner($ai, $store, $brand, $tones))->choose((int) $_POST['id'], (int) $_POST['i']);
+        flash('Tanlandi — endi "Telegramga yuborish" ni bosing.');
+        redirect($back(url(['p' => 'brend', 'show' => (int) $_POST['id']])) . '#natija');
+
+    case 'design_fix':
+        $fixed = (new GraphicDesigner($ai, $store, $brand, $tones))->fix((int) $_POST['id'], (int) $_POST['i'], trim((string) ($_POST['instruction'] ?? '')));
+        flash(!empty($fixed['slide_meta']) ? ((int) $_POST['i'] + 1) . "-slayd tuzatildi." : "Tuzatildi — yangi variant qo'shildi va tanlandi.");
+        redirect($back(url(['p' => 'brend', 'show' => (int) $_POST['id']])) . '#natija');
+
+    case 'photo_upload':
+        $added = 0;
+        foreach (uploaded_images('photos') as $tmp) {
+            Maryam\BrandAssets::addPhoto($tmp);
+            $added++;
+        }
+        flash($added ? "$added ta foto qo'shildi — dizayn buyurtmasida belgilab ishlating." : 'Foto tanlanmadi yoki juda katta (10 MB gacha).', $added ? 'ok' : 'error');
+        redirect(url(['p' => 'brend']) . '#fotolar');
+
+    case 'photo_delete':
+        Maryam\BrandAssets::deletePhoto((string) ($_POST['name'] ?? ''));
+        flash("Foto o'chirildi.");
+        redirect(url(['p' => 'brend']) . '#fotolar');
+
     case 'send_tg':
         // Rasm(lar)ni bot chatiga yuborish: Telegram ichida brauzer orqali yuklab olish ishonchsiz
         $design = $store->resultById((int) $_POST['id']);
-        $files = array_values(array_filter(($design['slides'] ?? []) ?: [$design['card_path'] ?? null], 'is_string'));
+        // Karusel — barcha slaydlar; AI variantlar — tanlangani (tanlanmagan bo'lsa hammasi); aks holda bitta rasm
+        $files = design_files($design ?? []);
+        if (!empty($design['variants']) && empty($design['slides']) && isset($design['chosen'])) {
+            $files = [$design['variants'][(int) $design['chosen']]['path'] ?? ''];
+        }
+        $files = array_values(array_filter($files, 'is_string'));
         $files = array_values(array_filter($files, 'is_file'));
         $token = (string) Maryam\Env::get('TELEGRAM_BOT_TOKEN', '');
         $auth = (string) ($_SESSION['auth'] ?? '');
@@ -204,7 +241,9 @@ switch ($action) {
         }
         $tg = new Maryam\Telegram($token, (string) $chat);
         if (count($files) >= 2) {
-            $tg->sendMediaGroup(array_slice($files, 0, 10), '🎨 Karusel: ' . count($files) . " ta slayd. Instagram'ga shu tartibda joylang.");
+            empty($design['slides'])
+                ? $tg->sendMediaGroup(array_slice($files, 0, 10), '🎨 ' . count($files) . " ta variant — eng yoqqanini Instagram'ga joylang.", 'photo')
+                : $tg->sendMediaGroup(array_slice($files, 0, 10), '🎨 Karusel: ' . count($files) . " ta slayd. Instagram'ga shu tartibda joylang.");
         } else {
             $tg->sendDocument($files[0], '🎨 Tayyor rasm — Instagram\'ga joylang');
         }

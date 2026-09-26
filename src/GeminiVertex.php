@@ -101,53 +101,146 @@ class GeminiVertex
     }
 
     /**
-     * Rasm generatsiya qilishga urinadi — bir nechta nomzod modelni ketma-ket sinaydi
-     * (rasm generatsiyasi qiluvchi modellar Vertex'da tez-tez o'zgaradi/yangilanadi).
-     * Hech biri ishlamasa (masalan hisobda ruxsat yo'q) — RuntimeException tashlaydi,
-     * chaqiruvchi (GraphicDesigner) buni ushlab, faqat matn-prompt bilan qanoatlanadi.
+     * Bir nechta rasmni PARALLEL chizadi (4 ta variant ≈ bitta rasm vaqtida).
+     * Modellar ketma-ket sinaladi: matnni eng toza yozadigani birinchi; topilmasa/band bo'lsa — keyingisi.
      *
-     * @return array{base64: string, mime_type: string, model_used: string}
+     * @param array<int, array{prompt: string, images?: array, aspect?: string}> $jobs
+     * @return array<int, array{base64: string, mime_type: string, model_used: string}|string> string — xato matni
      */
-    public function generateImage(string $prompt, array $models = ['gemini-3-pro-image', 'gemini-2.5-flash-image', 'gemini-3.1-flash-image'], array $images = []): array
+    public function generateImages(array $jobs): array
     {
-        $lastError = null;
-        foreach ($models as $model) {
-            try {
-                return $this->requestImage($prompt, $model, $images);
-            } catch (RuntimeException $e) {
-                $lastError = $e;
-                if (!preg_match('/\((404|429|503)\)/', $e->getMessage())) {
-                    throw $e;
+        $results = [];
+        $lastError = [];
+        $pending = array_keys($jobs);
+        foreach (self::imageModels($this->location) as [$model, $location]) {
+            if (!$pending) {
+                break;
+            }
+            $next = [];
+            foreach ($this->multiImage($model, $location, array_intersect_key($jobs, array_flip($pending))) as $i => $r) {
+                if (is_array($r)) {
+                    $results[$i] = $r;
+                } elseif (preg_match('/\((400|404|429|500|503)\)|faqat matn|qaytarmadi/u', $r)) {
+                    [$lastError[$i], $next[]] = [$r, $i]; // boshqa model bilan urinib ko'ramiz
+                } else {
+                    $results[$i] = $r;
                 }
             }
+            $pending = $next;
         }
-        throw $lastError ?? new RuntimeException('Rasm generatsiya qiluvchi model topilmadi.');
+        // Model o'lcham sozlamasini (aspectRatio) qabul qilmagan bo'lsa — sozlamasiz bir marta (kod baribir kesadi)
+        $retry = array_filter($pending, static fn ($i) => str_contains($lastError[$i] ?? '', '(400)') && isset($jobs[$i]['aspect']));
+        if ($retry) {
+            preg_match('/\[([^\]]+)\]/', $lastError[reset($retry)], $m);
+            $model = $m[1] ?? self::imageModels($this->location)[0][0];
+            $location = current(array_filter(self::imageModels($this->location), static fn ($c) => $c[0] === $model))[1] ?? $this->location;
+            $plain = array_map(static fn ($j) => array_diff_key($j, ['aspect' => 1]), array_intersect_key($jobs, array_flip($retry)));
+            foreach ($this->multiImage($model, $location, $plain) as $i => $r) {
+                if (is_array($r)) {
+                    $results[$i] = $r;
+                } else {
+                    $lastError[$i] = $r;
+                }
+            }
+            $pending = array_values(array_diff($pending, array_keys($results)));
+        }
+        foreach ($pending as $i) {
+            $results[$i] = $lastError[$i] ?? 'Rasm chizadigan model topilmadi.';
+        }
+        ksort($results);
+        return $results;
     }
 
-    private function requestImage(string $prompt, string $model, array $images = []): array
+    /** Bitta rasm (eski chaqiruvlar uchun). */
+    public function generateImage(string $prompt, array $models = [], array $images = [], string $aspect = '4:5'): array
     {
-        $response = $this->postToModel($model, [
-            'contents' => [['role' => 'user', 'parts' => [...self::imageParts($images), ['text' => $prompt]]]],
-            'generationConfig' => ['responseModalities' => ['TEXT', 'IMAGE']],
-        ]);
+        $r = $this->generateImages([['prompt' => $prompt, 'images' => $images, 'aspect' => $aspect]])[0];
+        return is_array($r) ? $r : throw new RuntimeException($r);
+    }
 
-        $candidate = $response['candidates'][0] ?? null;
-        if ($candidate === null) {
-            $reason = $response['promptFeedback']['blockReason'] ?? "noma'lum";
-            throw new RuntimeException("Vertex AI rasm qaytarmadi (sabab: $reason)");
+    /**
+     * Rasm modellari (model@joylashuv). Gemini 3 Pro Image — matnni eng aniq yozadi, faqat "global" da.
+     * .env: VERTEX_IMAGE_MODELS=gemini-3-pro-image-preview@global,gemini-2.5-flash-image@global
+     * @return array<int, array{0: string, 1: string}>
+     */
+    public static function imageModels(string $defaultLocation): array
+    {
+        $raw = (string) Env::get('VERTEX_IMAGE_MODELS', '')
+            ?: "gemini-3-pro-image-preview@global,gemini-3.1-flash-image-preview@global,gemini-2.5-flash-image@global,gemini-2.5-flash-image@$defaultLocation";
+        return array_values(array_unique(array_map(static function ($m) use ($defaultLocation) {
+            [$model, $loc] = array_pad(explode('@', trim($m), 2), 2, $defaultLocation);
+            return [$model, $loc ?: $defaultLocation];
+        }, array_filter(explode(',', $raw), 'trim')), SORT_REGULAR));
+    }
+
+    /** @return array<int, array|string> */
+    protected function multiImage(string $model, string $location, array $jobs): array
+    {
+        $token = $this->getAccessToken();
+        $host = $location === 'global' ? 'aiplatform.googleapis.com' : "$location-aiplatform.googleapis.com";
+        $url = "https://$host/v1beta1/projects/{$this->projectId}/locations/$location/publishers/google/models/$model:generateContent";
+        $mh = curl_multi_init();
+        $handles = [];
+        foreach ($jobs as $i => $job) {
+            $payload = [
+                'contents' => [['role' => 'user', 'parts' => [...self::imageParts($job['images'] ?? []), ['text' => $job['prompt']]]]],
+                'generationConfig' => ['responseModalities' => ['TEXT', 'IMAGE']]
+                    + (isset($job['aspect']) ? ['imageConfig' => ['aspectRatio' => $job['aspect']]] : []),
+            ];
+            $ch = curl_init($url);
+            Http::applyCaBundle($ch);
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 240,
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $token, 'x-goog-user-project: ' . $this->projectId],
+                CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            ]);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$i] = $ch;
         }
+        do {
+            $status = curl_multi_exec($mh, $running);
+            if ($running) {
+                curl_multi_select($mh, 1.0);
+            }
+        } while ($running && $status === CURLM_OK);
 
+        $out = [];
+        foreach ($handles as $i => $ch) {
+            $body = curl_multi_getcontent($ch);
+            $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            $err = curl_error($ch);
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+            $out[$i] = self::parseImage($model, (string) $body, $code, $err);
+        }
+        curl_multi_close($mh);
+        return $out;
+    }
+
+    protected static function parseImage(string $model, string $body, int $code, string $err): array|string
+    {
+        if ($body === '' && $err !== '') {
+            return "Vertex AI bilan aloqa yo'q: $err";
+        }
+        $response = json_decode($body, true) ?? [];
+        if ($code !== 200) {
+            return "Vertex AI xatosi ($code) [$model]: " . mb_substr((string) ($response['error']['message'] ?? $body), 0, 300);
+        }
+        $candidate = $response['candidates'][0] ?? null;
+        // Pro model avval "o'ylash" qoralamalarini (thought) qaytarishi mumkin — oxirgi haqiqiy rasm olinadi
+        $image = null;
         foreach ($candidate['content']['parts'] ?? [] as $part) {
-            if (isset($part['inlineData']['data'])) {
-                return [
-                    'base64' => $part['inlineData']['data'],
-                    'mime_type' => $part['inlineData']['mimeType'] ?? 'image/png',
-                    'model_used' => $model,
-                ];
+            if (isset($part['inlineData']['data']) && empty($part['thought'])) {
+                $image = $part['inlineData'];
             }
         }
-
-        throw new RuntimeException("Model ($model) rasm emas, faqat matn qaytardi.");
+        if ($image) {
+            return ['base64' => $image['data'], 'mime_type' => $image['mimeType'] ?? 'image/png', 'model_used' => $model];
+        }
+        $reason = $response['promptFeedback']['blockReason'] ?? ($candidate['finishReason'] ?? "noma'lum");
+        return $candidate ? "Model ($model) rasm emas, faqat matn qaytardi ($reason)." : "Vertex AI rasm qaytarmadi (sabab: $reason)";
     }
 
     public static function imageParts(array $images): array

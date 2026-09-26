@@ -71,6 +71,18 @@ bo'lsa (masalan, shu Mini App versiyasida), o'rnatish buyrug'ini bir marta qayta
 curl -fsSL https://raw.githubusercontent.com/aslitukhtaev/maryamagentlar/claude/quirky-bardeen-xnme2p/deploy/setup.sh | sudo bash
 ```
 
+## AI Dizayner (rasm modeli)
+
+Dizayner postni Vertex AI'ning rasm modeli bilan chizadi (matn modeli bilan bir xil ruxsat — alohida
+sozlash shart emas). Tartib: `gemini-3-pro-image-preview` (yozuvni eng aniq chizadi) → yangi flash →
+`gemini-2.5-flash-image`. Birinchisi mavjud bo'lmasa, keyingisi o'zi ishlatiladi.
+
+- Taxminiy narx: Pro model bilan bitta rasm ≈ $0.13, ya'ni 4 variantli post ≈ $0.5 (Cloud kreditidan).
+- `.env` da o'zgartirish mumkin (ixtiyoriy):
+  - `DESIGN_VARIANTS=2` — har safar 4 emas, 2 ta variant (arzonroq, tezroq)
+  - `VERTEX_IMAGE_MODELS=gemini-2.5-flash-image@global` — faqat arzon model
+- Rasm modeli ishlamasa, Dizayner oddiy shablon chizadi va sababini sahifada ko'rsatadi.
+
 ## Kerakli buyruqlar (serverda)
 
 | Nima | Buyruq |

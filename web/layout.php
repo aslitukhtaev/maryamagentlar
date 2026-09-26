@@ -142,6 +142,28 @@ foreach ($sections as $key => $sec) {
   .logo-prev img { max-height:66px; max-width:130px; display:block; }
   .upload-btn { display:inline-block; margin-top:6px; background:var(--brand); color:#fff; border-radius:8px; padding:7px 14px; font-weight:600; font-size:14px; cursor:pointer; }
   .upload-btn.big { display:block; text-align:center; padding:14px; font-size:15px; margin:4px 0 0; }
+  .variants { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; max-width:760px; }
+  .vcard { border:1.5px solid var(--line); border-radius:12px; padding:8px; background:#fff; min-width:0; }
+  .vcard.chosen { border-color:var(--gold); box-shadow:0 0 0 2px var(--gold); }
+  .vcard img, .slide img { width:100%; aspect-ratio:4/5; object-fit:cover; border-radius:8px; display:block; background:#e5ece9; }
+  .variants.tall img { aspect-ratio:9/16; }
+  .vmeta { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; margin:6px 0 4px; font-size:13px; }
+  .vact { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .vact form { margin:0; }
+  .ghost-link { font-size:13px; padding:5px 4px; }
+  .chk { font-size:12px; border-radius:99px; padding:1px 8px; }
+  .chk.ok { background:#e3f3ea; color:#16643d; } .chk.bad { background:#fff1dc; color:#8a4b00; }
+  .fix { margin-top:6px; font-size:13px; } .fix summary { cursor:pointer; color:var(--brand); font-weight:600; }
+  .fix textarea { min-height:56px; margin:6px 0; font-size:14px; }
+  .slides .slide { flex:none; width:220px; }
+  .slides:not(.carousel) .slide { width:300px; max-width:100%; }
+  .photo-pick { display:grid; grid-template-columns:repeat(auto-fill, minmax(74px, 1fr)); gap:6px; margin-bottom:8px; }
+  .photo-pick label { position:relative; margin:0; cursor:pointer; aspect-ratio:1; border-radius:8px; overflow:hidden; }
+  .photo-pick input { position:absolute; opacity:0; pointer-events:none; }
+  .photo-pick img { width:100%; height:100%; object-fit:cover; display:block; border:3px solid transparent; border-radius:8px; box-sizing:border-box; }
+  .photo-pick i { display:none; position:absolute; top:4px; right:4px; background:var(--gold); color:#1b1f1d; font-style:normal; font-weight:700; border-radius:99px; width:22px; height:22px; text-align:center; line-height:22px; font-size:13px; }
+  .photo-pick input:checked + img { border-color:var(--gold); }
+  .photo-pick input:checked ~ i { display:block; }
   .ref-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:8px; margin-top:12px; }
   .ref { position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; background:#eee; }
   .ref img { width:100%; height:100%; object-fit:cover; display:block; }

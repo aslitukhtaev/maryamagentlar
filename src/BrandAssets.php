@@ -74,6 +74,63 @@ final class BrandAssets
         }
     }
 
+    // ==================== JAMOA FOTOLARI (dizaynda ishlatiladigan haqiqiy odamlar) ====================
+
+    public const MAX_PHOTOS = 30;
+
+    /** Jamoa/mijoz fotosi: AI shu odamni dizaynga qo'yadi (yuzi o'zgarmaydi). */
+    public static function addPhoto(string $tmpPath): string
+    {
+        if (count(self::photos()) >= self::MAX_PHOTOS) {
+            throw new InvalidArgumentException('Ko\'pi bilan ' . self::MAX_PHOTOS . " ta foto. Eskilarini o'chirib, keyin yuklang.");
+        }
+        $im = self::orient(self::load($tmpPath), $tmpPath);
+        @mkdir(self::dir() . '/photos', 0775, true);
+        $name = date('Ymd-His') . '-' . bin2hex(random_bytes(3));
+        imagejpeg(self::fit($im, 1600), self::dir() . "/photos/$name.jpg", 88);
+        imagejpeg(self::fit($im, 1024), self::dir() . "/photos/$name.ai.jpg", 85);
+        return $name;
+    }
+
+    /** @return string[] foto nomlari (eng yangisi birinchi) */
+    public static function photos(): array
+    {
+        $files = glob(self::dir() . '/photos/*.jpg') ?: [];
+        $names = array_map(static fn ($f) => basename($f, '.jpg'), array_filter($files, static fn ($f) => !str_ends_with($f, '.ai.jpg')));
+        rsort($names);
+        return array_values($names);
+    }
+
+    public static function photoPath(string $name, bool $small = false): ?string
+    {
+        if (!preg_match('/^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$/', $name)) {
+            return null;
+        }
+        $path = self::dir() . "/photos/$name" . ($small ? '.ai' : '') . '.jpg';
+        return is_file($path) ? $path : null;
+    }
+
+    public static function deletePhoto(string $name): void
+    {
+        foreach ([false, true] as $small) {
+            if ($p = self::photoPath($name, $small)) {
+                unlink($p);
+            }
+        }
+    }
+
+    /** @param string[] $names @return array<int, array{mime: string, data: string}> */
+    public static function photosForAi(array $names): array
+    {
+        $out = [];
+        foreach (array_slice(array_values(array_unique($names)), 0, 3) as $name) {
+            if ($p = self::photoPath((string) $name, true)) {
+                $out[] = ['mime' => 'image/jpeg', 'data' => base64_encode((string) file_get_contents($p))];
+            }
+        }
+        return $out;
+    }
+
     /** Dizayner agentga beriladigan namunalar (kichik nusxalar, base64). */
     public static function refsForAi(int $limit = 4): array
     {
@@ -252,6 +309,14 @@ final class BrandAssets
             throw new InvalidArgumentException('Bu rasm fayli emas. PNG, JPG yoki WEBP yuklang.');
         }
         return $im;
+    }
+
+    /** Telefon fotosi EXIF bo'yicha buriladi (aks holda tik rasm yonboshlab chiqadi). */
+    private static function orient(\GdImage $im, string $path): \GdImage
+    {
+        $o = function_exists('exif_read_data') ? (int) (@exif_read_data($path)['Orientation'] ?? 1) : 1;
+        $angle = [3 => 180, 6 => -90, 8 => 90][$o] ?? 0;
+        return $angle ? (imagerotate($im, $angle, 0) ?: $im) : $im;
     }
 
     private static function fit(\GdImage $im, int $max): \GdImage

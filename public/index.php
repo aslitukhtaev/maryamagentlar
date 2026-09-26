@@ -117,23 +117,20 @@ if (($_GET['img'] ?? '') !== '') {
     exit;
 }
 
-// Dizayner natijasi: ?d=<natija id>&s=<slayd, 0 = asosiy>[&dl=1] yoki &zip=1 (karusel slaydlari)
+// Dizayner natijasi: ?d=<natija id>&s=<rasm tartibi>[&dl=1] yoki &zip=1 (karusel)
 if (isset($_GET['d'])) {
     $design = $store->resultById((int) $_GET['d']);
-    $files = $design ? array_values(array_filter([$design['card_path'] ?? null, ...($design['slides'] ?? [])])) : [];
-    if (!empty($design['slides'])) {
-        $files = $design['slides'];
-    }
-    $path = isset($_GET['zip']) ? ($design['zip_path'] ?? null) : ($files[(int) ($_GET['s'] ?? 0)] ?? null);
+    $path = isset($_GET['zip']) ? ($design['zip_path'] ?? null) : (design_files($design ?? [])[(int) ($_GET['s'] ?? 0)] ?? null);
     $real = $path ? realpath($path) : false;
     if (!$real || !str_starts_with($real, realpath(ROOT . '/output') . DIRECTORY_SEPARATOR)) {
         http_response_code(404);
         exit;
     }
-    $isZip = str_ends_with($real, '.zip');
-    header('Content-Type: ' . ($isZip ? 'application/zip' : 'image/png'));
-    if ($isZip || isset($_GET['dl'])) {
-        header('Content-Disposition: attachment; filename="maryam-' . (int) $_GET['d'] . '-' . basename($real) . '"');
+    $ext = strtolower(pathinfo($real, PATHINFO_EXTENSION));
+    header('Content-Type: ' . (['zip' => 'application/zip', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'][$ext] ?? 'image/png'));
+    header('Cache-Control: private, max-age=86400');
+    if ($ext === 'zip' || isset($_GET['dl'])) {
+        header('Content-Disposition: attachment; filename="maryam-' . (int) $_GET['d'] . '-' . ((int) ($_GET['s'] ?? 0) + 1) . '.' . $ext . '"');
     }
     readfile($real);
     exit;
@@ -142,9 +139,11 @@ if (isset($_GET['d'])) {
 // Grid namunasi va logolar (rasm sifatida)
 if (isset($_GET['render']) || isset($_GET['asset'])) {
     if (isset($_GET['asset'])) {
-        $file = $_GET['asset'] === 'ref'
-            ? Maryam\BrandAssets::refPath((string) ($_GET['n'] ?? ''), isset($_GET['sm']))
-            : ROOT . Maryam\PostRenderer::BRAND_DIR . '/' . ($_GET['asset'] === 'logo-white' ? 'logo-white.png' : 'logo.png');
+        $file = match ($_GET['asset']) {
+            'ref' => Maryam\BrandAssets::refPath((string) ($_GET['n'] ?? ''), isset($_GET['sm'])),
+            'photo' => Maryam\BrandAssets::photoPath((string) ($_GET['n'] ?? ''), isset($_GET['sm'])),
+            default => ROOT . Maryam\PostRenderer::BRAND_DIR . '/' . ($_GET['asset'] === 'logo-white' ? 'logo-white.png' : 'logo.png'),
+        };
         if (!$file || !is_file($file)) {
             http_response_code(404);
             exit;
