@@ -310,8 +310,8 @@ final class Store
         $st = $this->db->prepare('SELECT v.*, b.tourism_type FROM copy_variants v JOIN briefs b ON b.id = v.brief_id WHERE v.id = ?');
         $st->execute([$id]);
         $row = $st->fetch();
-        return $row ? ['db_id' => (int) $row['id'], 'rating' => $row['rating'], 'feedback' => $row['feedback'],
-                       'tourism_type' => $row['tourism_type']] + json_decode($row['data'], true) : null;
+        return $row ? ['db_id' => (int) $row['id'], 'brief_id' => (int) $row['brief_id'], 'rating' => $row['rating'],
+                       'feedback' => $row['feedback'], 'tourism_type' => $row['tourism_type']] + json_decode($row['data'], true) : null;
     }
 
     public function recentPlans(int $limit = 12): array
@@ -338,6 +338,55 @@ final class Store
             'avg_rating' => (float) $one('SELECT AVG(rating) FROM (SELECT rating FROM copy_variants WHERE rating IS NOT NULL ORDER BY id DESC LIMIT 20)'),
             'unrated' => (int) $one('SELECT COUNT(*) FROM copy_variants WHERE rating IS NULL'),
         ];
+    }
+
+    // ==================== BOT ISHLARI VA HOLAT ====================
+
+    public function createJob(string $chatId, string $type, array $payload): int
+    {
+        $this->db->prepare('INSERT INTO jobs (chat_id, type, payload) VALUES (?, ?, ?)')
+            ->execute([$chatId, $type, json_encode($payload, JSON_UNESCAPED_UNICODE)]);
+        return (int) $this->db->lastInsertId();
+    }
+
+    public function job(int $id): ?array
+    {
+        $st = $this->db->prepare('SELECT * FROM jobs WHERE id = ?');
+        $st->execute([$id]);
+        $row = $st->fetch();
+        return $row ? ['payload' => json_decode($row['payload'], true) ?: []] + $row : null;
+    }
+
+    public function finishJob(int $id, string $status, string $error = ''): void
+    {
+        $this->db->prepare("UPDATE jobs SET status = ?, error = ?, finished_at = datetime('now', 'localtime') WHERE id = ?")
+            ->execute([$status, $error, $id]);
+    }
+
+    public function startJob(int $id): void
+    {
+        $this->db->prepare("UPDATE jobs SET status = 'running' WHERE id = ?")->execute([$id]);
+    }
+
+    /** Hozir bajarilayotgan ishlar (30 daqiqadan eskisi — osilib qolgan deb hisoblanadi). */
+    public function runningJobs(): int
+    {
+        return (int) $this->db->query("SELECT COUNT(*) FROM jobs WHERE status IN ('queued', 'running')
+                                        AND created_at > datetime('now', 'localtime', '-30 minutes')")->fetchColumn();
+    }
+
+    public function meta(string $key): ?string
+    {
+        $st = $this->db->prepare('SELECT value FROM meta WHERE key = ?');
+        $st->execute([$key]);
+        $v = $st->fetchColumn();
+        return $v === false ? null : (string) $v;
+    }
+
+    public function setMeta(string $key, string $value): void
+    {
+        $this->db->prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+            ->execute([$key, $value]);
     }
 
     // ==================== SUHBAT HOLATI (Telegram orchestrator uchun) ====================

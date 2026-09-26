@@ -182,6 +182,18 @@ final class Database
                 created_at     TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
             );
 
+            -- Telegram bot uzoq ishlarni (copywriter, reja, dizayn) alohida jarayonda bajaradi
+            CREATE TABLE IF NOT EXISTS jobs (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id       TEXT NOT NULL,
+                type          TEXT NOT NULL,                  -- post | again | plan | design
+                payload       TEXT NOT NULL DEFAULT '{}',
+                status        TEXT NOT NULL DEFAULT 'queued', -- queued | running | done | failed
+                error         TEXT NOT NULL DEFAULT '',
+                created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                finished_at   TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS meta (
                 key           TEXT PRIMARY KEY,
                 value         TEXT NOT NULL

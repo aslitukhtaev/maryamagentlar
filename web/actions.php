@@ -52,8 +52,8 @@ switch ($action) {
             'template_id' => $result['template_id'] ?? null,
             'variant' => $variant,
         ]);
-        flash('Dizayn tayyor — pastda.');
-        redirect(url(['p' => 'studio', 'brief' => $briefId]) . '#design');
+        flash('Dizayn tayyor — variant ostida.');
+        redirect(url(['p' => 'studio', 'brief' => $briefId]) . '#v' . (int) $_POST['variant_id']);
 
     // ---------- Haftalik reja ----------
     case 'plan':

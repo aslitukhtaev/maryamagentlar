@@ -90,9 +90,6 @@ final class Copywriter
         if ($format !== null) {
             // Reja bandi / shablon: bitta tayyor material kerak (AI ko'proq qaytarsa ham)
             $variants = array_slice($variants, 0, 1);
-            if ($variants && $variants[0]['format'] === '') {
-                $variants[0]['format'] = $format;
-            }
         }
 
         // 3-bosqich: tahrir. Birinchi raundda hammasi, keyingisida faqat muammolilari.
@@ -118,8 +115,11 @@ final class Copywriter
             $toEdit = array_keys(array_filter($variants, fn ($v) => $v['score'] < self::MIN_SCORE || $this->lint($v)));
         }
 
-        // Saqlash
+        // Saqlash (muharrir formatni qaytarmasligi mumkin — reja/shablon formatini tiklaymiz)
         foreach ($variants as &$v) {
+            if ($format !== null && $v['format'] === '') {
+                $v['format'] = $format;
+            }
             unset($v['previous_review']);
             $v['warnings'] = $this->lint($v);
             $v['db_id'] = $this->store->saveVariant($briefId, $v);

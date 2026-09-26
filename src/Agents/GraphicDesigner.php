@@ -66,6 +66,9 @@ final class GraphicDesigner
         $say('1/2 Kontseptsiya: maket va rasm prompti tayyorlanmoqda...');
         $data = Prompts::ask($this->ai, $this->store, 'designer/prompt', $context, 0.8, true, $briefId, self::NAME, 'prompt');
         $layout = array_values(array_map('strval', (array) ($data['layout'] ?? [])));
+        // Har variantning dizayni alohida saqlanadi (biri ikkinchisini o'chirmasin)
+        $variantId = (int) ($options['variant']['db_id'] ?? 0);
+        $suffix = $variantId ? "-$variantId" : '';
 
         $imagePrompt = trim((string) ($data['image_prompt'] ?? ''));
         $altText = trim((string) ($data['alt_text'] ?? ''));
@@ -78,7 +81,7 @@ final class GraphicDesigner
             try {
                 $image = $this->ai->generateImage($imagePrompt);
                 $ext = str_contains($image['mime_type'], 'png') ? 'png' : 'jpg';
-                $imagePath = Output::dir($brief) . "/designer.$ext";
+                $imagePath = Output::dir($brief) . "/designer$suffix.$ext";
                 file_put_contents($imagePath, base64_decode($image['base64']));
                 $generated = true;
                 $say("Rasm tayyor ({$image['model_used']}).");
@@ -96,7 +99,7 @@ final class GraphicDesigner
             'image_path' => $imagePath,
             'image_generated' => $generated,
         ];
-        $this->store->saveResult($briefId, self::NAME, 'final', $result);
+        $this->store->saveResult($briefId, self::NAME, $variantId ? "variant_$variantId" : 'final', $result);
         return $result;
     }
 }

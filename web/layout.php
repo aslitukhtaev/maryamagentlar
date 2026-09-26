@@ -9,8 +9,9 @@ $old = $_SESSION['old'] ?? [];
 unset($_SESSION['old']);
 $nav = [
     'Ish' => ['home', 'studio', 'reja'],
-    "O'qitish" => ['shablonlar', 'qoidalar', 'namunalar', 'promptlar'],
+    "O'qitish" => ['shablonlar', 'qoidalar', 'namunalar'],
     'Bilim' => ['katalog', 'bilimlar'],
+    'Kengaytirilgan' => ['promptlar'],
 ];
 ?>
 <!doctype html>
@@ -81,17 +82,37 @@ $nav = [
   .busy { margin-left:6px; }
   @media (max-width: 820px) {
     .wrap { grid-template-columns:1fr; background:none; }
-    aside { position:static; height:auto; display:flex; flex-wrap:wrap; gap:4px; padding:12px; }
-    .logo { width:100%; margin:0 4px 6px; } .nav-group { display:none; }
-    aside a { padding:6px 9px; font-size:14px; }
+    aside { position:sticky; top:0; z-index:5; height:auto; display:flex; flex-wrap:nowrap; overflow-x:auto; gap:4px; padding:8px 10px; scrollbar-width:none; }
+    aside::-webkit-scrollbar { display:none; }
+    .logo, .nav-group { display:none; }
+    aside a { padding:7px 11px; font-size:14px; white-space:nowrap; flex:none; }
     main { padding:18px 16px 50px; } .grid2 { grid-template-columns:1fr; }
   }
 </style>
+<?php if (!empty($_SESSION['tg'])): ?>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); try { Telegram.WebApp.setHeaderColor('#0a4638'); } catch (e) {} }</script>
+<?php endif; ?>
+<script>
+  // Nusxalash: Telegram ichida clipboard API ishlamasa — eski usul
+  function copyText(el, btn) {
+    const text = el.innerText;
+    const done = () => { btn.textContent = 'Nusxalandi ✓'; };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, () => fallback());
+    } else { fallback(); }
+    function fallback() {
+      const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = 'Belgilab nusxalang'; }
+      t.remove();
+    }
+  }
+</script>
 </head>
 <body>
 <div class="wrap">
 <aside>
-  <div class="logo">MARYAM TRAVEL<small>Marketing bo'limi<?= Env::get('WEB_MOCK', '') === '1' ? ' · sinov rejimi' : '' ?></small></div>
+  <div class="logo">MARYAM TRAVEL<small>Marketing bo'limi<?= $ai instanceof Maryam\GeminiMock ? ' · sinov rejimi' : '' ?></small></div>
   <?php foreach ($nav as $group => $pages): ?>
     <div class="nav-group"><?= e($group) ?></div>
     <?php foreach ($pages as $p): ?>

@@ -75,11 +75,12 @@ final class Manager
         );
         $mergedBrief = array_merge($partialBrief, $newBrief);
 
+        $knowledgeId = 0;
         if ($action === 'save_knowledge' && !empty(trim((string) ($data['knowledge']['content'] ?? '')))) {
-            $this->store->addKnowledge(
-                trim((string) $data['knowledge']['content']),
-                trim((string) ($data['knowledge']['category'] ?? '')) ?: 'umumiy'
-            );
+            $knowledgeId = $this->store->insertRow('knowledge', [
+                'content' => trim((string) $data['knowledge']['content']),
+                'category' => trim((string) ($data['knowledge']['category'] ?? '')) ?: 'umumiy',
+            ]);
         }
 
         $briefReady = null;
@@ -105,6 +106,7 @@ final class Manager
             'ask_field' => $askField,
             'brief' => $briefReady,
             'plan_wishes' => trim((string) ($data['plan_wishes'] ?? '')),
+            'knowledge_id' => $knowledgeId,
         ];
     }
 

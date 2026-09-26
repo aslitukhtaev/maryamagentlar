@@ -27,7 +27,6 @@ $return = url(['p' => 'namunalar']);
       <?php if ($x['note'] !== ''): ?><span class="small muted"><?= e($x['note']) ?></span><?php endif; ?>
       <pre class="text"><?= e($x['content']) ?></pre>
     </div>
-    <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="table" value="house_examples">
-      <input type="hidden" name="id" value="<?= (int) $x['id'] ?>"><input type="hidden" name="return" value="<?= e($return) ?>"><button class="danger">O'chirish</button></form>
+    <?= delete_form('house_examples', (int) $x['id'], $return) ?>
   </div>
 <?php endforeach; ?>

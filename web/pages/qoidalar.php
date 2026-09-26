@@ -16,7 +16,7 @@ $statusForm = static function (array $r, string $status, string $label, string $
       <button class="<?= $class ?>"><?= e($label) ?></button></form><?php
 };
 $deleteForm = static function (array $r, string $label = "O'chirish") use ($return) {
-    ?><form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="table" value="rules">
+    ?><form method="post" onsubmit="return confirm('Rostdan o\'chirilsinmi?')"><?= csrf_field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="table" value="rules">
       <input type="hidden" name="id" value="<?= (int) $r['id'] ?>"><input type="hidden" name="return" value="<?= e($return) ?>">
       <button class="danger"><?= e($label) ?></button></form><?php
 };

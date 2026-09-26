@@ -12,3 +12,6 @@ service-account-key.json
 *.service-account.json
 key.json
 GOOGLE_APPLICATION_CREDENTIALS
+
+# Web sessiyalari (Telegram Mini App kirishi)
+data/sessions/

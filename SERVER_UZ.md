@@ -57,6 +57,20 @@ sudo -u maryam php /opt/maryamagentlar/bin/test-vertex.php
   manzilidan foydalaning. Kompyuterlardagi eski baza bilan serverdagisi alohida.
 - **Kod yangilanishi:** istalgan kompyuterdan GitHub'ga push qilsangiz, server 5 daqiqada o'zi yangilanadi.
 
+## Telegram Mini App
+
+O'rnatish skripti Mini App manzilini (`WEBAPP_URL`) o'zi yozadi. Botda **"📱 O'qitish markazi"**
+tugmasi yoki pastdagi **"Ilova"** tugmasi web ilovani Telegram ichida parolsiz ochadi. Kirish faqat
+`.env` dagi `TELEGRAM_CHAT_ID` (yoki `TELEGRAM_ALLOWED_CHAT_IDS`) foydalanuvchilari uchun ochiq.
+
+**Yangilanishdan keyin:** kod 5 daqiqada o'zi yangilanadi. Lekin bot xizmati sozlamalari o'zgargan
+bo'lsa (masalan, shu Mini App versiyasida), o'rnatish buyrug'ini bir marta qayta ishga tushiring
+(xavfsiz, ma'lumotlar saqlanadi):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aslitukhtaev/maryamagentlar/claude/quirky-bardeen-xnme2p/deploy/setup.sh | sudo bash
+```
+
 ## Kerakli buyruqlar (serverda)
 
 | Nima | Buyruq |

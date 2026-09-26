@@ -7,7 +7,6 @@ use Maryam\Brief;
 $briefId = (int) ($_GET['brief'] ?? 0);
 $current = $briefId ? $store->brief($briefId) : null;
 $result = $current ? $store->result($briefId, Copywriter::NAME, 'final') : null;
-$design = $current ? $store->result($briefId, 'designer', 'final') : null;
 $saved = $current ? array_column($store->variants($briefId), null, 'db_id') : [];
 $templates = $store->activeTemplates();
 $preTemplate = (string) ($old['template_id'] ?? $_GET['template'] ?? '');
@@ -16,7 +15,7 @@ $here = url(['p' => 'studio', 'brief' => $briefId]);
 <?php if (!$current): ?>
 <h1>Studiya</h1>
 <p class="lead">Mavzu bering — agentlar strategiya tuzadi, yozadi va muharrir tekshiradi. Shablon tanlasangiz, bitta tayyor material
-  shu tuzilmada chiqadi; tanlamasangiz — 5 ta hook, 2 ta post va 2 ta reklama.</p>
+  shu tuzilmada chiqadi; tanlamasangiz — 2 ta post va 2 ta reklama (turli burchaklardan).</p>
 
 <form method="post" class="card" <?= busy_attr() ?>>
   <?= csrf_field() ?><input type="hidden" name="action" value="run">
@@ -24,7 +23,7 @@ $here = url(['p' => 'studio', 'brief' => $briefId]);
   <input name="topic" required placeholder="Vyetnam, Fukuok — oktabr qaynoq tur" value="<?= e($old['topic'] ?? '') ?>">
   <div class="row">
     <div><label>Shablon</label><select name="template_id">
-      <option value="">Shablonsiz — 4 ta variant</option>
+      <option value="">Shablonsiz — 2 post + 2 reklama</option>
       <?php foreach ($templates as $t): ?>
         <option value="<?= $t['id'] ?>" <?= $preTemplate === (string) $t['id'] ? 'selected' : '' ?>><?= e($t['name']) ?> (<?= e(FORMATS[$t['format']] ?? $t['format']) ?>)</option>
       <?php endforeach; ?>
@@ -80,21 +79,11 @@ $here = url(['p' => 'studio', 'brief' => $briefId]);
   </div>
 
   <?php if ($result['hooks']): ?>
-    <h2>Hooklar</h2>
+    <h2>Birinchi qatorlar <span class="muted small">(hook — o'quvchini to'xtatadigan jumla)</span></h2>
     <div class="card"><ol class="small"><?php foreach ($result['hooks'] as $h): ?><li><?= e($h) ?></li><?php endforeach; ?></ol></div>
   <?php endif; ?>
 
   <h2>Tayyor matn<?= count($result['variants']) > 1 ? 'lar' : '' ?></h2>
   <?php foreach ($result['variants'] as $v) { variant_card($v, $saved[$v['db_id']] ?? [], $here, $briefId); } ?>
 
-  <?php if ($design): ?>
-    <h2 id="design">Dizayn</h2>
-    <div class="card">
-      <?php if ($design['image_generated']): ?><img src="<?= e(url(['img' => $briefId])) ?>" alt="<?= e($design['alt_text']) ?>" style="max-width:100%;border-radius:8px"><?php endif; ?>
-      <?php if (!empty($design['layout'])): ?><h3>Maket</h3><ul class="small"><?php foreach ($design['layout'] as $l): ?><li><?= e($l) ?></li><?php endforeach; ?></ul><?php endif; ?>
-      <h3>Fon rasmi uchun prompt</h3>
-      <pre class="block"><?= e($design['image_prompt']) ?></pre>
-      <?php if (!$design['image_generated']): ?><p class="muted small">Rasm generatsiya bo'lmadi — promptni boshqa vositada ishlating.</p><?php endif; ?>
-    </div>
-  <?php endif; ?>
 <?php endif; ?>

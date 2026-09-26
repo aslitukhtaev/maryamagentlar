@@ -84,8 +84,10 @@ function appVertex(): array
             // so'rov muvaffaqiyatsiz bo'lsa, tasdiqlangan modelga tez o'tish uchun
             : ['gemini-2.5-flash', 'gemini-2.0-flash-001', 'gemini-1.5-flash-002', 'gemini-1.5-flash-001'];
 
+        // Sinov rejimi: real AI chaqirilmaydi (AI_MOCK=1; eski nomi WEB_MOCK=1 ham ishlaydi)
+        $mock = Maryam\Env::get('AI_MOCK', '') === '1' || Maryam\Env::get('WEB_MOCK', '') === '1';
         $app = [
-            'ai'    => new Maryam\GeminiVertex(
+            'ai'    => $mock ? new Maryam\GeminiMock() : new Maryam\GeminiVertex(
                 $projectId,
                 $location,
                 Maryam\Env::get('VERTEX_MODEL', 'gemini-2.5-flash'),

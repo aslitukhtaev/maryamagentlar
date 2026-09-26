@@ -45,6 +45,54 @@ final class Telegram
         }
     }
 
+    /** Tugmali xabar; yuborilgan xabarni qaytaradi (keyin tahrirlash uchun message_id kerak). */
+    public function message(string $text, ?array $markup = null): array
+    {
+        $params = ['chat_id' => $this->chatId, 'text' => mb_substr($text, 0, 4096), 'disable_web_page_preview' => 'true'];
+        if ($markup !== null) {
+            $params['reply_markup'] = json_encode($markup, JSON_UNESCAPED_UNICODE);
+        }
+        return $this->call('sendMessage', $params)['result'] ?? [];
+    }
+
+    /** Mavjud xabarni tahrirlaydi (jarayon holati, tanlangan baho). Matn o'zgarmagan bo'lsa jim o'tadi. */
+    public function edit(int $messageId, ?string $text, ?array $markup = null): void
+    {
+        $params = ['chat_id' => $this->chatId, 'message_id' => $messageId];
+        if ($markup !== null) {
+            $params['reply_markup'] = json_encode($markup, JSON_UNESCAPED_UNICODE);
+        }
+        try {
+            if ($text === null) {
+                $this->call('editMessageReplyMarkup', $params);
+            } else {
+                $this->call('editMessageText', $params + ['text' => mb_substr($text, 0, 4096), 'disable_web_page_preview' => 'true']);
+            }
+        } catch (RuntimeException $e) {
+            if (!str_contains($e->getMessage(), 'not modified')) {
+                throw $e;
+            }
+        }
+    }
+
+    public function action(string $action = 'typing'): void
+    {
+        try {
+            $this->call('sendChatAction', ['chat_id' => $this->chatId, 'action' => $action]);
+        } catch (RuntimeException) {
+            // "yozmoqda..." belgisi muhim emas
+        }
+    }
+
+    /** Istalgan Bot API metodi (menyu tugmasi, buyruqlar ro'yxati va h.k.). */
+    public function api(string $method, array $params = []): array
+    {
+        return $this->call($method, array_map(
+            static fn ($v) => is_array($v) ? json_encode($v, JSON_UNESCAPED_UNICODE) : $v,
+            $params
+        ));
+    }
+
     /** Faylni (masalan copywriter.txt) hujjat sifatida yuboradi. */
     public function sendDocument(string $filePath, string $caption = ''): void
     {
@@ -124,12 +172,13 @@ final class Telegram
 
     private function call(string $method, array $params, bool $multipart = false): array
     {
-        $ch = curl_init("https://api.telegram.org/bot{$this->token}/{$method}");
+        $base = rtrim(Env::get('TELEGRAM_API_BASE', 'https://api.telegram.org') ?? '', '/');
+        $ch = curl_init("$base/bot{$this->token}/{$method}");
         Http::applyCaBundle($ch);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_TIMEOUT => $method === 'getUpdates' ? 60 : 30,
             CURLOPT_POSTFIELDS => $multipart ? $params : http_build_query($params),
         ]);
         $body = curl_exec($ch);

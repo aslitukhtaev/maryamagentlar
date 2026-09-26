@@ -34,7 +34,6 @@ $categories = ['umumiy' => 'Umumiy', 'ishonch' => 'Ishonch (tajriba, mijozlar, l
 <?php foreach ($store->rows('knowledge') as $k): ?>
   <div class="card list-item">
     <div><span class="badge"><?= e($categories[$k['category']] ?? $k['category']) ?></span> <?= e($k['content']) ?></div>
-    <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="table" value="knowledge">
-      <input type="hidden" name="id" value="<?= (int) $k['id'] ?>"><input type="hidden" name="return" value="<?= e($return) ?>"><button class="danger">O'chirish</button></form>
+    <?= delete_form('knowledge', (int) $k['id'], $return) ?>
   </div>
 <?php endforeach; ?>

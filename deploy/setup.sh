@@ -95,6 +95,8 @@ http://$IP {
 }
 EOF
 systemctl restart caddy
+setenv WEBAPP_URL "https://$HOST"   # Telegram bot ichidagi Mini App shu manzilni ochadi
+chown "$APP_USER:$APP_USER" "$ENV" && chmod 600 "$ENV"   # sed -i faylni root nomiga qayta yaratadi
 
 say "6/7 Telegram bot xizmati"
 cat > /etc/systemd/system/maryam-bot.service <<EOF
@@ -109,6 +111,8 @@ WorkingDirectory=$APP
 ExecStart=/usr/bin/php bin/bot.php
 Restart=always
 RestartSec=10
+# Bot qayta ishga tushganda (yangilanish) fon ishlari (bin/job.php) uzilmasin
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target
