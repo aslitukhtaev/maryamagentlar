@@ -55,10 +55,11 @@ final class TelegramBot
                 ['command' => 'bekor', 'description' => 'Boshlangan ishni bekor qilish'],
                 ['command' => 'yordam', 'description' => 'Bot qanday ishlaydi'],
             ]]);
+            // Manzil sozlanmagan bo'lsa — BotFather'da qo'lda qo'yilgan tugmaga tegmaymiz
             $app = BotUi::webAppUrl();
-            $tg->api('setChatMenuButton', ['menu_button' => $app !== ''
-                ? ['type' => 'web_app', 'text' => 'Ilova', 'web_app' => ['url' => $app]]
-                : ['type' => 'commands']]);
+            if ($app !== '') {
+                $tg->api('setChatMenuButton', ['menu_button' => ['type' => 'web_app', 'text' => "O'qitish", 'web_app' => ['url' => $app]]]);
+            }
         } catch (Throwable $e) {
             echo "⚠ Menyu sozlanmadi: {$e->getMessage()}\n";
         }
