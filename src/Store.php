@@ -44,10 +44,29 @@ final class Store
                        $result['tokens_in'], $result['tokens_out'], $result['ms']]);
     }
 
-    public function saveResult(int $briefId, string $agent, string $kind, array $data): void
+    public function saveResult(int $briefId, string $agent, string $kind, array $data): int
     {
         $this->db->prepare('INSERT INTO agent_results (brief_id, agent, kind, data) VALUES (?, ?, ?, ?)')
             ->execute([$briefId, $agent, $kind, json_encode($data, JSON_UNESCAPED_UNICODE)]);
+        return (int) $this->db->lastInsertId();
+    }
+
+    /** Eng oxirgi natija (id bilan) — masalan variant dizayni. */
+    public function latestResultRow(int $briefId, string $agent, string $kind): ?array
+    {
+        $st = $this->db->prepare('SELECT id FROM agent_results WHERE brief_id = ? AND agent = ? AND kind = ? ORDER BY id DESC LIMIT 1');
+        $st->execute([$briefId, $agent, $kind]);
+        $id = $st->fetchColumn();
+        return $id ? $this->resultById((int) $id) : null;
+    }
+
+    /** Bitta natija id bo'yicha (dizayner rasmlarini ko'rsatish uchun). */
+    public function resultById(int $id): ?array
+    {
+        $st = $this->db->prepare('SELECT * FROM agent_results WHERE id = ?');
+        $st->execute([$id]);
+        $row = $st->fetch();
+        return $row ? ['id' => (int) $row['id'], 'brief_id' => (int) $row['brief_id'], 'kind' => $row['kind']] + (json_decode($row['data'], true) ?: []) : null;
     }
 
     public function result(int $briefId, string $agent, string $kind): ?array
@@ -325,15 +344,15 @@ final class Store
     /** Dizayner chiqargan oxirgi tayyor rasmlar (galereya uchun). */
     public function recentDesigns(int $limit = 12): array
     {
-        $st = $this->db->prepare("SELECT r.brief_id, r.kind, r.data, b.topic FROM agent_results r JOIN briefs b ON b.id = r.brief_id
-                                  WHERE r.agent = 'designer' AND r.kind LIKE 'variant_%' ORDER BY r.id DESC LIMIT ?");
+        $st = $this->db->prepare("SELECT r.id, r.data, b.topic FROM agent_results r JOIN briefs b ON b.id = r.brief_id
+                                  WHERE r.agent = 'designer' AND r.kind != 'final' ORDER BY r.id DESC LIMIT ?");
         $st->bindValue(1, $limit, PDO::PARAM_INT);
         $st->execute();
         $out = [];
         foreach ($st->fetchAll() as $r) {
             $d = json_decode($r['data'], true);
             if (!empty($d['card_path']) && is_file($d['card_path'])) {
-                $out[] = ['brief_id' => (int) $r['brief_id'], 'variant_id' => (int) substr($r['kind'], 8), 'topic' => $r['topic']];
+                $out[] = ['id' => (int) $r['id'], 'topic' => $r['topic'], 'slides' => count($d['slides'] ?? []), 'format' => $d['format'] ?? 'post'];
             }
         }
         return $out;

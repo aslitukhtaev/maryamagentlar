@@ -106,6 +106,26 @@ final class Telegram
         ], multipart: true);
     }
 
+    /** Bir nechta faylni bitta albom qilib yuboradi (karusel slaydlari, 2-10 ta). */
+    public function sendMediaGroup(array $filePaths, string $caption = '', string $type = 'document'): void
+    {
+        $media = [];
+        $params = ['chat_id' => $this->chatId];
+        foreach (array_values(array_slice($filePaths, 0, 10)) as $i => $path) {
+            if (!is_file($path)) {
+                throw new RuntimeException("Fayl topilmadi: $path");
+            }
+            $item = ['type' => $type, 'media' => "attach://f$i"];
+            if ($i === count($filePaths) - 1 && $caption !== '') {
+                $item['caption'] = mb_substr($caption, 0, 1024); // albomda izoh oxirgi faylga
+            }
+            $media[] = $item;
+            $params["f$i"] = new \CURLFile($path);
+        }
+        $params['media'] = json_encode($media, JSON_UNESCAPED_UNICODE);
+        $this->call('sendMediaGroup', $params, multipart: true);
+    }
+
     /** Rasmni (masalan designer.png) to'g'ridan-to'g'ri suratdek (preview bilan) yuboradi. */
     public function sendPhoto(string $filePath, string $caption = ''): void
     {

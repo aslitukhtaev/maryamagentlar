@@ -1,43 +1,77 @@
 <?php
 declare(strict_types=1);
 
+use Maryam\Agents\GraphicDesigner;
+use Maryam\BrandAssets;
 use Maryam\Marketing;
 use Maryam\PostRenderer;
 
 $colors = PostRenderer::colors($store);
-$samples = PostRenderer::gridSamples(Marketing::products());
-$dir = ROOT . PostRenderer::BRAND_DIR;
+$style = GraphicDesigner::style($store);
+$dir = BrandAssets::dir();
+$refs = BrandAssets::refs();
+$autoColors = (string) $store->meta('brand_colors_auto') !== '';
+$current = isset($_GET['show']) ? $store->resultById((int) $_GET['show']) : null;
+$designs = $store->recentDesigns(18);
 $logos = ['logo-white' => ['Oq logo', 'Rasmlardagi yashil lentada shu turadi'], 'logo' => ['Rangli logo', 'Och fonlar uchun']];
-$v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("$dir/logo-white.png") . json_encode($colors)), 0, 8);
+$v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("$dir/logo-white.png") . json_encode($colors) . json_encode($style)), 0, 8);
+$formats = ['post' => ['Post', 'Bitta rasm 1080×1350'], 'karusel' => ['Karusel', '5-8 slayd, har biri alohida rasm'], 'reels' => ['Stories / Reels', 'Muqova 1080×1920']];
+$fmt = (string) ($old['format'] ?? $_GET['format'] ?? 'post');
 ?>
-<?php page_header('🎨', 'Dizayner', "Har bir postga brend uslubida tayyor rasm chizadi. Logo va dizayn namunalaringizni yuklang — rasmlar sizning uslubingizda chiqadi."); ?>
+<?php page_header('🎨', 'Dizayner', "Brendingiz uslubida tayyor rasm chizadi: post, karusel yoki stories. Uslubni siz yuklagan grid namunalaridan o'rganadi."); ?>
 
-<?php $designs = $store->recentDesigns(); if ($designs): ?>
-<h2>Oxirgi tayyor rasmlar</h2>
+<?php if (!function_exists('imagecreatetruecolor')): ?>
+  <div class="flash error">Serverda rasm moduli hali o'rnatilmagan — server bir necha daqiqada o'zi o'rnatadi (avtomatik yangilanish). Keyin sahifani yangilang.</div>
+<?php endif; ?>
+<?php if (!$refs): ?>
+  <div class="flash">Avval pastdagi <b>"Brend uslubi"</b> bo'limiga logo va Instagram gridingiz skrinshotlarini yuklang — dizayner ranglar va uslubni shulardan oladi.</div>
+<?php endif; ?>
+
+<form method="post" class="card" <?= busy_attr() ?>><?= csrf_field() ?>
+  <input type="hidden" name="action" value="design_free">
+  <label>Nima chizamiz?</label>
+  <div class="choice-grid three">
+    <?php foreach ($formats as $k => [$label, $hint]): ?>
+      <label class="choice"><input type="radio" name="format" value="<?= $k ?>" <?= $fmt === $k ? 'checked' : '' ?>>
+        <span><b><?= e($label) ?></b><small><?= e($hint) ?></small></span></label>
+    <?php endforeach; ?>
+  </div>
+  <label>Matn yoki g'oya</label>
+  <textarea name="text" required rows="4" style="min-height:110px" placeholder="Masalan: Vyetnam, Fukuok — 820$ dan, 12 oktabr, 7 kun, nonushta&#10;Karusel uchun: Vyetnamga borishdan oldin bilish kerak bo'lgan 5 narsa (yoki 1-slayd: ..., 2-slayd: ...)"><?= e($old['text'] ?? '') ?></textarea>
+  <div class="actions"><button type="submit" class="primary-btn">Chizish</button><span class="busy muted" hidden>Dizayner ishlamoqda (30-90 soniya)…</span></div>
+</form>
+
+<?php if ($current): ?>
+  <h2 id="natija">Natija<?= !empty($current['slides']) ? ' — karusel, ' . count($current['slides']) . ' ta slayd' : '' ?></h2>
+  <div class="card"><?php design_view($current); ?></div>
+<?php endif; ?>
+
+<?php if ($designs): ?>
+<h2>Oxirgi dizaynlar</h2>
 <div class="card" style="padding:10px">
   <div class="ig-grid wide">
     <?php foreach ($designs as $d): ?>
-      <a href="<?= e(url(['img' => $d['brief_id'], 'v' => $d['variant_id'], 'card' => 1])) ?>" download="post-<?= $d['variant_id'] ?>.png" title="<?= e($d['topic']) ?> — yuklab olish">
-        <img src="<?= e(url(['img' => $d['brief_id'], 'v' => $d['variant_id'], 'card' => 1])) ?>" alt="<?= e($d['topic']) ?>" loading="lazy">
+      <a href="<?= e(url(['p' => 'brend', 'show' => $d['id']])) ?>#natija" title="<?= e($d['topic']) ?>">
+        <img src="<?= e(url(['d' => $d['id'], 's' => 0])) ?>" alt="<?= e($d['topic']) ?>" loading="lazy">
+        <?php if ($d['slides']): ?><em class="badge-slides">▦ <?= $d['slides'] ?></em><?php endif; ?>
         <span><?= e($d['topic']) ?></span>
       </a>
     <?php endforeach; ?>
   </div>
 </div>
-<?php else: ?>
-<div class="card small muted">Hali tayyor rasm yo'q. Copywriter natijasi ostidagi <b>"Dizayn tayyorlash"</b> tugmasini bosing (yoki botda 🎨 Dizayn) — rasm shu yerda paydo bo'ladi.</div>
 <?php endif; ?>
 
+<h2>Brend uslubi</h2>
 <div class="grid2">
   <div class="card">
-    <h3>1. Logo</h3>
+    <h3>Logo</h3>
     <p class="small muted">PNG, shaffof fonli bo'lsa eng yaxshi. <b>Oq logo</b> yashil lenta va fotolar ustida ishlatiladi.</p>
     <?php foreach ($logos as $key => [$label, $hint]): $has = is_file("$dir/$key.png"); ?>
       <form method="post" enctype="multipart/form-data" class="upload-row" <?= busy_attr() ?>><?= csrf_field() ?>
         <input type="hidden" name="action" value="brand_upload">
         <div class="logo-prev <?= $key === 'logo-white' ? 'dark' : '' ?>">
           <?php if ($has): ?><img src="<?= e(url(['asset' => $key, 'v' => $v()])) ?>" alt="<?= e($label) ?>">
-          <?php else: ?><span class="muted small"><?= $key === 'logo-white' ? '<span style="color:#cfe0da">Yuklanmagan</span>' : 'Yuklanmagan' ?></span><?php endif; ?>
+          <?php else: ?><span class="small" style="color:<?= $key === 'logo-white' ? '#cfe0da' : 'var(--muted)' ?>">Yuklanmagan</span><?php endif; ?>
         </div>
         <div>
           <b class="small"><?= e($label) ?></b><br><span class="small muted"><?= e($hint) ?></span><br>
@@ -50,16 +84,16 @@ $v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("
   </div>
 
   <div class="card">
-    <h3>2. Dizayn namunalari (grid)</h3>
-    <p class="small muted">Instagram gridingiz skrinshoti, yoqqan postlar yoki dizayneringiz ishlari. Dizayner agent eng yangi 4 tasiga
-      qarab uslub, kompozitsiya va ranglarni moslaydi. Bir nechtasini birdan tanlash mumkin (<?= Maryam\BrandAssets::MAX_REFS ?> tagacha).</p>
+    <h3>Grid namunalari</h3>
+    <p class="small muted">Instagram gridingiz skrinshoti, yoqqan postlar yoki dizayneringiz ishlari. Ranglar va uslub shulardan
+      <b>avtomatik</b> aniqlanadi; dizayner eng yangi 4 tasini ko'rib ishlaydi (<?= BrandAssets::MAX_REFS ?> tagacha).</p>
     <form method="post" enctype="multipart/form-data" <?= busy_attr() ?>><?= csrf_field() ?>
       <input type="hidden" name="action" value="ref_upload">
       <label class="upload-btn big">📷 Rasmlarni tanlash
         <input type="file" name="refs[]" accept="image/*" multiple hidden onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()"></label>
-      <button type="submit" hidden></button><span class="busy muted small" hidden>Yuklanmoqda…</span>
+      <button type="submit" hidden></button><span class="busy muted small" hidden>Yuklanmoqda va uslub tahlil qilinmoqda…</span>
     </form>
-    <?php $refs = Maryam\BrandAssets::refs(); if ($refs): ?>
+    <?php if ($refs): ?>
       <div class="ref-grid">
         <?php foreach ($refs as $i => $name): ?>
           <div class="ref">
@@ -71,54 +105,45 @@ $v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("
           </div>
         <?php endforeach; ?>
       </div>
-    <?php else: ?>
-      <p class="small muted" style="margin-top:10px">Hali namuna yo'q.</p>
     <?php endif; ?>
   </div>
 </div>
 
-<h2>Sahifangiz qanday ko'rinadi</h2>
-<?php if (!function_exists('imagecreatetruecolor')): ?>
-  <div class="flash error">Serverda rasm chizish moduli (php-gd) o'rnatilmagan. Serverda o'rnatish buyrug'ini bir marta qayta
-    ishga tushiring (SERVER_UZ.md) — keyin grid va tayyor rasmlar ishlaydi.</div>
-<?php endif; ?>
-<p class="small muted">Agentlar chiqaradigan tayyor rasmlar sahifangizda shunday ko'rinadi: sotuv, ishonch va qamrov postlari almashinadi,
-  hammasi bir xil ranglar va pastki lentada (logongiz bilan). Rasmni bosing — to'liq o'lchamda yuklab olasiz.</p>
-<div class="card" style="padding:10px">
+<div class="card">
+  <h3>Aniqlangan uslub <span class="muted small">— namunalardan avtomatik</span></h3>
+  <p class="small"><?php foreach (['primary' => 'Asosiy', 'accent' => "Urg'u", 'dark' => "To'q"] as $k => $label): ?>
+    <span class="swatch big" style="background:<?= e($colors[$k]) ?>"></span><?= e($label) ?> &nbsp;
+  <?php endforeach; ?>
+  <?php if (!$autoColors): ?><span class="muted">(namuna yuklanmagan — standart ranglar)</span><?php endif; ?></p>
+  <?php if ($style): ?>
+    <p class="small"><b>Fon:</b> <?= !empty($style['photo_background']) ? 'haqiqiy foto' : 'rangli fon' ?> ·
+      <b>Sarlavha:</b> <?= !empty($style['uppercase_titles']) ? 'KATTA HARFLAR' : 'oddiy' ?> ·
+      <b>Matn:</b> <?= e($style['text_density'] ?: '—') ?> · <b>Kayfiyat:</b> <?= e($style['mood'] ?: '—') ?></p>
+    <?php if ($style['notes'] !== ''): ?><p class="small muted"><?= e($style['notes']) ?></p><?php endif; ?>
+  <?php endif; ?>
+  <?php if ($refs): ?>
+    <form method="post" <?= busy_attr() ?>><?= csrf_field() ?><input type="hidden" name="action" value="style_refresh">
+      <button type="submit" class="ghost">Qayta tahlil qilish</button><span class="busy muted small" hidden>Tahlil qilinmoqda…</span></form>
+  <?php endif; ?>
+</div>
+
+<details class="card more-card"><summary><b>Sahifangiz qanday ko'rinadi</b> <span class="muted small">— tayyor rasmlar gridda (namuna)</span></summary>
   <div class="ig-grid">
-    <?php foreach ($samples as $i => [$layout, , $note]): ?>
+    <?php foreach (PostRenderer::gridSamples(Marketing::products()) as $i => [$layout, , $note]): ?>
       <a href="<?= e(url(['render' => 'grid', 'i' => $i, 'dl' => 1])) ?>" title="<?= e($note) ?> — yuklab olish">
         <img src="<?= e(url(['render' => 'grid', 'i' => $i, 'v' => $v()])) ?>" alt="<?= e($note) ?>" loading="lazy">
         <span><?= e($note) ?></span>
       </a>
     <?php endforeach; ?>
   </div>
-</div>
-
-<details class="card more-card"><summary><b>Ranglar</b> <span class="muted small">— logotipingiz ranglariga moslash</span></summary>
-<form method="post"><?= csrf_field() ?>
-  <input type="hidden" name="action" value="brand_colors">
-  <p class="small muted">Logotipdagi ranglar. O'zgartirsangiz, grid va barcha yangi rasmlar darhol yangilanadi.</p>
-  <div class="row">
-  <?php foreach (['primary' => 'Asosiy (fon, lenta)', 'accent' => 'Urg\'u (narx, belgilar)', 'dark' => "To'q (gradient)"] as $k => $label): ?>
-    <label class="color-row"><input type="color" name="<?= $k ?>" value="<?= e($colors[$k]) ?>"> <?= e($label) ?></label>
-  <?php endforeach; ?>
-  </div>
-  <div class="actions"><button type="submit">Saqlash</button></div>
-</form>
 </details>
 
-<details class="card more-card small"><summary><b>Dizayneringiz uchun qo'llanma</b> <span class="muted">— o'lcham, shrift, ranglar, qoidalar</span></summary>
+<details class="card more-card small"><summary><b>Dizayneringiz uchun qo'llanma</b> <span class="muted">— o'lcham, shrift, ranglar</span></summary>
   <table>
     <tr><td><b>O'lcham</b></td><td>Post va karusel: 1080×1350 (4:5). Reels/Stories muqovasi: 1080×1920. Chetdan bo'sh joy: 72 px.</td></tr>
-    <tr><td><b>Shrift</b></td><td>Montserrat — sarlavha ExtraBold, matn SemiBold/Medium (Google Fonts, bepul). Boshqa shrift ishlatilmaydi.</td></tr>
-    <tr><td><b>Ranglar</b></td><td>
-      <?php foreach ($colors as $k => $hex): ?><span class="swatch" style="background:<?= e($hex) ?>"></span><code><?= e($hex) ?></code> &nbsp;<?php endforeach; ?>
-    </td></tr>
-    <tr><td><b>Pastki lenta</b></td><td>Har rasmda: to'q yashil lenta (150 px), tepasida ingichka oltin chiziq; chapda telefon, o'ngda oq logo.</td></tr>
-    <tr><td><b>Narx</b></td><td>Oltin plashkada, katta: "820$ dan". Narx doim sana va "narxga kiradi" bilan birga.</td></tr>
-    <tr><td><b>Sarlavha</b></td><td>2-5 so'z, oq, qalin. Baqiruvchi clickbait yo'q. Matn rasmning 20% idan oshmasin (Meta reklamasi uchun).</td></tr>
-    <tr><td><b>Foto</b></td><td>Manzilning yorqin, haqiqiy fotosi; tepasi va pastki qismi qoraytiriladi (matn o'qilishi uchun). Odamlar yuzi yaqindan emas.</td></tr>
+    <tr><td><b>Shrift</b></td><td>Montserrat — sarlavha ExtraBold, matn SemiBold/Medium (Google Fonts, bepul).</td></tr>
+    <tr><td><b>Ranglar</b></td><td><?php foreach ($colors as $hex): ?><span class="swatch" style="background:<?= e($hex) ?>"></span><code><?= e($hex) ?></code> &nbsp;<?php endforeach; ?></td></tr>
+    <tr><td><b>Pastki lenta</b></td><td>Har rasmda: asosiy rangdagi lenta (150 px), tepasida ingichka urg'u chizig'i; chapda telefon, o'ngda oq logo.</td></tr>
+    <tr><td><b>Karusel</b></td><td>1-slayd — hook va "Surib ko'ring →"; o'rtada raqamli maslahatlar; oxirgi — CTA tugmasi. O'ng yuqorida "2/7".</td></tr>
   </table>
-  <p class="muted" style="margin-bottom:0">Shrift fayllari: <code>resources/fonts/</code> (SIL Open Font License).</p>
 </details>

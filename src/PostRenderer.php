@@ -23,7 +23,63 @@ final class PostRenderer
         'tips' => ['Maslahat (karusel slaydi)', 1080, 1350],
         'compare' => ['Taqqoslash: X yoki Y', 1080, 1350],
         'cover' => ['Reels / Stories muqovasi', 1080, 1920],
+        'slide_cover' => ['Karusel: 1-slayd (muqova)', 1080, 1350],
+        'slide_cta' => ['Karusel: oxirgi slayd (CTA)', 1080, 1350],
     ];
+
+    /** Karusel slaydlarida ishlatiladigan tartiblar. */
+    public const SLIDE_LAYOUTS = ['slide_cover', 'tips', 'slide_cta', 'hot_tour', 'price_list', 'review', 'compare'];
+
+    /**
+     * Karusel: har slayd alohida PNG. Slayd raqami ("2/7") va maslahat raqami avtomatik qo'yiladi.
+     * @param array<int, array> $slides har biri: layout + maydonlar
+     * @return string[] PNG baytlari
+     */
+    public function renderCarousel(array $slides, array $colors): array
+    {
+        $slides = array_values(array_filter($slides, static fn ($x) => is_array($x) && $x !== []));
+        $n = count($slides);
+        $out = [];
+        $tip = 0;
+        foreach ($slides as $i => $slide) {
+            $layout = in_array($slide['layout'] ?? '', self::SLIDE_LAYOUTS, true) ? $slide['layout']
+                : ($i === 0 ? 'slide_cover' : ($i === $n - 1 ? 'slide_cta' : 'tips'));
+            $slide['slide'] = ($i + 1) . '/' . $n;
+            if ($layout === 'tips') {
+                $slide['number'] = (string) ($slide['number'] ?? ++$tip);
+                $slide['label'] ??= ''; // karusel ichida har slaydda belgi takrorlanmasin
+            }
+            $out[] = $this->render($layout, $slide, $colors);
+        }
+        return $out;
+    }
+
+    /**
+     * Copywriter yozgan "1-slayd: ..., 2-slayd: ..." matnidan slaydlar (AI slaydlar bermagan holat uchun).
+     * @return array<int, array>
+     */
+    public static function slidesFromText(string $visual, string $cta = ''): array
+    {
+        preg_match_all('/(?:^|\n)\s*(\d+)\s*[-–.]?\s*slayd\s*[:.\-–]\s*(.+?)(?=\n\s*\d+\s*[-–.]?\s*slayd|\z)/isu', $visual, $m, PREG_SET_ORDER);
+        $texts = array_map(static fn ($x) => trim(preg_replace('/\s+/u', ' ', $x[2])), $m);
+        if (count($texts) < 2) {
+            return [];
+        }
+        $slides = [];
+        $last = count($texts) - 1;
+        foreach ($texts as $i => $t) {
+            $t = trim($t, " \"'“”");
+            // "Sarlavha — tushuntirish" yoki birinchi gap sarlavha bo'ladi
+            $parts = preg_split('/\s+[—–-]\s+|(?<=[.!?:])\s+/u', $t, 2);
+            [$title, $text] = [trim($parts[0], ' .:'), trim($parts[1] ?? '')];
+            $slides[] = match (true) {
+                $i === 0 => ['layout' => 'slide_cover', 'title' => $t],
+                $i === $last => ['layout' => 'slide_cta', 'title' => $title, 'text' => $text !== '' ? $text : $cta],
+                default => ['layout' => 'tips', 'title' => $title, 'text' => $text],
+            };
+        }
+        return $slides;
+    }
 
     private const M = 72; // chetdan bo'sh joy
     private const STRIP = 150;
@@ -33,17 +89,17 @@ final class PostRenderer
     private int $h;
     private array $c = [];
 
-    public function __construct(private array $brand, private ?string $logoPath = null, private ?string $logoWhitePath = null)
+    public function __construct(private array $brand, private ?string $logoPath = null, private ?string $logoWhitePath = null, private array $style = [])
     {
     }
 
     public const BRAND_DIR = '/data/brand';
 
     /** Yuklangan logolar bilan tayyor renderer (logo bo'lmasa — so'z-belgi chiziladi). */
-    public static function forBrand(array $brand): self
+    public static function forBrand(array $brand, array $style = []): self
     {
         $dir = ROOT . self::BRAND_DIR;
-        return new self($brand, is_file("$dir/logo.png") ? "$dir/logo.png" : null, is_file("$dir/logo-white.png") ? "$dir/logo-white.png" : null);
+        return new self($brand, is_file("$dir/logo.png") ? "$dir/logo.png" : null, is_file("$dir/logo-white.png") ? "$dir/logo-white.png" : null, $style);
     }
 
     /**
@@ -83,7 +139,8 @@ final class PostRenderer
 
     public static function colors(Store $store): array
     {
-        $saved = json_decode((string) $store->meta('brand_colors'), true) ?: [];
+        // Ranglar grid namunalaridan avtomatik aniqlanadi (BrandAssets::refreshPalette)
+        $saved = json_decode((string) $store->meta('brand_colors_auto'), true) ?: [];
         return $saved + ['primary' => '#0a4638', 'accent' => '#c9982f', 'dark' => '#06261f', 'light' => '#ffffff'];
     }
 
@@ -101,8 +158,14 @@ final class PostRenderer
             $this->c[$k] = self::rgb($hex);
         }
 
+        if (!empty($this->style['uppercase_titles']) && isset($d['title'])) {
+            $d['title'] = mb_strtoupper((string) $d['title']); // kompaniya gridida sarlavhalar katta harfda
+        }
         $this->background($d['bg'] ?? null, $layout);
         $this->{'layout' . str_replace('_', '', ucwords($layout, '_'))}($d);
+        if (!empty($d['slide']) && !in_array($layout, ['tips', 'slide_cover', 'slide_cta'], true)) {
+            $this->slideCounter((string) $d['slide']); // karuselga qo'shilgan boshqa tartiblar
+        }
         $this->strip($d['cta'] ?? '');
 
         ob_start();
@@ -169,16 +232,24 @@ final class PostRenderer
 
     private function layoutTips(array $d): void
     {
-        $this->pill($d['label'] ?? 'SAQLAB QOʻYING', self::M, self::M + 10);
-        $this->text((string) ($d['number'] ?? '1'), 'ExtraBold', 300, self::M - 12, 560, $this->c['accent']);
+        $label = $d['label'] ?? 'SAQLAB QOʻYING';
+        if ($label !== '') {
+            $this->pill($label, self::M, self::M + 10);
+        }
+        $this->text((string) ($d['number'] ?? '1'), 'ExtraBold', 300, self::M - 12, 640, $this->c['accent']);
         $title = $this->fit($d['title'] ?? '', 'ExtraBold', 72, 44, $this->w - 2 * self::M, 3);
-        $y = $this->lines($title, self::M, 640, $this->c['light']);
+        $y = $this->lines($title, self::M, 720, $this->c['light']);
         if (!empty($d['text'])) {
             $body = $this->fit($d['text'], 'Medium', 40, 30, $this->w - 2 * self::M, 6);
+            $room = $this->h - self::STRIP - 40 - ($y + 30); // pastki lentaga tegmasin
+            while ($body['lines'] && $body['height'] > $room) {
+                array_pop($body['lines']);
+                $body['height'] = $body['lh'] * count($body['lines']);
+            }
             $this->lines($body, self::M, $y + 30, $this->alpha('light', 110));
         }
         if (!empty($d['slide'])) {
-            $this->text($this->clean($d['slide']), 'SemiBold', 30, $this->w - self::M - $this->width($this->clean($d['slide']), 'SemiBold', 30), self::M + 58, $this->c['light']);
+            $this->slideCounter($d['slide']);
         }
     }
 
@@ -208,12 +279,60 @@ final class PostRenderer
         $title = $this->fit($d['title'] ?? '', 'ExtraBold', 132, 70, $this->w - 2 * self::M, 4);
         $y = $this->lines($title, self::M, 300, $this->c['light']);
         if (!empty($d['subtitle'])) {
-            $this->roundRect(self::M, $y + 30, self::M + $this->width($this->clean($d['subtitle']), 'Bold', 44) + 56, $y + 120, 20, $this->c['accent']);
-            $this->text($this->clean($d['subtitle']), 'Bold', 44, self::M + 28, $y + 93, $this->c['dark']);
+            // Plashka matnga moslanadi: sig'masa shrift kichrayadi, keyin 2 qatorga bo'linadi
+            $sub = $this->fit($d['subtitle'], 'Bold', 44, 30, $this->w - 2 * self::M - 56, 2);
+            $wide = max(array_map(fn ($l) => $this->width($l, 'Bold', $sub['size']), $sub['lines']));
+            $this->roundRect(self::M, $y + 30, self::M + $wide + 56, $y + 30 + $sub['height'] + 34, 20, $this->c['accent']);
+            $this->lines($sub, self::M + 28, $y + 47, $this->c['dark']);
         }
         if (!empty($d['price'])) {
             $this->priceBadge($d['price'], self::M, $this->h - self::STRIP - 230);
         }
+    }
+
+    private function layoutSlideCover(array $d): void
+    {
+        $this->pill($d['label'] ?? 'KARUSEL', self::M, self::M + 10);
+        if (!empty($d['slide'])) {
+            $this->slideCounter($d['slide']);
+        }
+        $title = $this->fit($d['title'] ?? '', 'ExtraBold', 110, 56, $this->w - 2 * self::M, 5);
+        $y = max(self::M + 140, (int) (($this->h - self::STRIP) / 2 - $title['height'] / 2) - 40);
+        $y = $this->lines($title, self::M, $y, $this->c['light']);
+        if (!empty($d['subtitle'])) {
+            $sub = $this->fit($d['subtitle'], 'SemiBold', 42, 28, $this->w - 2 * self::M, 2);
+            $this->lines($sub, self::M, $y + 20, $this->c['accent']);
+        }
+        $swipe = 'Surib ko‘ring  →';
+        $this->text($swipe, 'Bold', 36, $this->w - self::M - $this->width($swipe, 'Bold', 36), $this->h - self::STRIP - 60, $this->c['light']);
+    }
+
+    private function layoutSlideCta(array $d): void
+    {
+        if (!empty($d['slide'])) {
+            $this->slideCounter($d['slide']);
+        }
+        $title = $this->fit($d['title'] ?? 'Tur tanlashda yordam kerakmi?', 'ExtraBold', 92, 52, $this->w - 2 * self::M, 4);
+        $y = $this->lines($title, self::M, 300, $this->c['light']);
+        if (!empty($d['text'])) {
+            $body = $this->fit($d['text'], 'Medium', 42, 30, $this->w - 2 * self::M, 4);
+            $y = $this->lines($body, self::M, $y + 30, $this->alpha('light', 115));
+        }
+        $button = $this->clean((string) ($d['button'] ?? '')) ?: (trim((string) preg_replace('/\s*\(.*?\)/u', '', (string) ($this->brand['phone'] ?? ''))) ?: "Direct'ga yozing");
+        $bw = min($this->width($button, 'ExtraBold', 44) + 80, $this->w - 2 * self::M);
+        $by = min($y + 70, $this->h - self::STRIP - 180);
+        $this->roundRect(self::M, $by, self::M + $bw, $by + 110, 55, $this->c['accent']);
+        $this->text($button, 'ExtraBold', 44, self::M + 40, $by + 72, $this->c['dark']);
+        $save = 'Saqlab qo‘ying — kerak bo‘ladi';
+        $this->text($save, 'SemiBold', 30, self::M, $this->h - self::STRIP - 60, $this->alpha('light', 100));
+    }
+
+    private function slideCounter(string $label): void
+    {
+        $label = $this->clean($label);
+        $w = $this->width($label, 'Bold', 28);
+        $this->roundRect($this->w - self::M - $w - 40, self::M + 10, $this->w - self::M, self::M + 74, 32, $this->alpha('light', 30));
+        $this->text($label, 'Bold', 28, $this->w - self::M - $w - 20, self::M + 54, $this->c['light']);
     }
 
     // ==================== UMUMIY ELEMENTLAR ====================

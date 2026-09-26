@@ -114,6 +114,16 @@ foreach ($sections as $key => $sec) {
   .list-row { display:flex; flex-direction:column; padding:10px 18px; text-decoration:none; color:var(--ink); border-bottom:1px solid var(--line); }
   .list-row:last-child { border-bottom:0; } .list-row:hover { background:#faf9f5; }
   .ig-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; max-width:620px; margin:0 auto; }
+  .choice-grid.three { grid-template-columns:repeat(3, 1fr); }
+  .slides { display:flex; gap:8px; margin-top:6px; }
+  .slides a { position:relative; flex:none; display:block; }
+  .slides img { width:280px; max-width:100%; border-radius:8px; display:block; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  .slides.carousel { overflow-x:auto; scroll-snap-type:x mandatory; padding-bottom:6px; }
+  .slides.carousel a { scroll-snap-align:start; }
+  .slides.carousel img { width:220px; }
+  .slides span { position:absolute; top:6px; right:6px; background:rgba(0,0,0,.6); color:#fff; font-size:11px; border-radius:99px; padding:1px 7px; }
+  .badge-slides { position:absolute; top:5px; right:5px; background:rgba(0,0,0,.6); color:#fff; font-style:normal; font-size:11px; border-radius:6px; padding:1px 6px; }
+  .swatch.big { width:26px; height:26px; border-radius:6px; }
   .ig-grid.wide { max-width:none; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); }
   details.more-card > summary { cursor:pointer; list-style:none; }
   details.more-card > summary::-webkit-details-marker { display:none; }

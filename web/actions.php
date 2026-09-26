@@ -60,6 +60,21 @@ switch ($action) {
         flash('Dizayn tayyor — variant ostida.');
         redirect(url(['p' => 'studio', 'brief' => $briefId]) . '#v' . (int) $_POST['variant_id']);
 
+    // ---------- Dizayner (mustaqil) ----------
+    case 'design_free':
+        $text = trim((string) ($_POST['text'] ?? ''));
+        if ($text === '') {
+            throw new InvalidArgumentException('Matn yoki g\'oyani yozing.');
+        }
+        $format = in_array($_POST['format'] ?? '', ['post', 'karusel', 'reels'], true) ? $_POST['format'] : 'post';
+        $firstLine = trim((string) strtok($text, "\n"));
+        $type = preg_match('/umra|haj|makka|madina/iu', $text) ? 'umra' : 'outbound';
+        $brief = Brief::normalize(['topic' => mb_strimwidth($firstLine, 0, 80, '…'), 'tourism_type' => $type, 'details' => $text], $tones);
+        $brief['id'] = $store->saveBrief($brief);
+        $design = (new GraphicDesigner($ai, $store, $brand, $tones))->run($brief, [], ['format' => $format, 'text' => $text, 'kind' => 'free']);
+        flash(!empty($design['card_path']) ? 'Tayyor! Rasmni bosing — yuklab olinadi.' : "Rasm chizilmadi — tafsilotlarni pastda ko'ring.", !empty($design['card_path']) ? 'ok' : 'error');
+        redirect(url(['p' => 'brend', 'show' => $design['result_id']]) . '#natija');
+
     // ---------- Haftalik reja ----------
     case 'plan':
         $plan = (new ContentPlanner($ai, $store, $brand, $tones))->run(new DateTimeImmutable('today'), [
@@ -143,18 +158,28 @@ switch ($action) {
             Maryam\BrandAssets::addRef($tmp);
             $added++;
         }
-        flash($added ? "$added ta namuna qo'shildi — dizayner agent endi shu uslubga qarab ishlaydi."
-                     : "Rasm tanlanmadi yoki fayl juda katta (har biri 10 MB gacha).", $added ? 'ok' : 'error');
+        $styleError = $added ? refresh_brand_style($ai, $store) : null;
+        if (!$added) {
+            flash("Rasm tanlanmadi yoki fayl juda katta (har biri 10 MB gacha).", 'error');
+        } else {
+            flash("$added ta namuna qo'shildi. Ranglar va uslub namunalardan avtomatik aniqlandi." . ($styleError ? " $styleError" : ''), $styleError ? 'error' : 'ok');
+        }
         redirect(url(['p' => 'brend']));
 
     case 'ref_delete':
         Maryam\BrandAssets::deleteRef((string) ($_POST['name'] ?? ''));
+        refresh_brand_style($ai, $store);
         flash("Namuna o'chirildi.");
         redirect(url(['p' => 'brend']));
 
     case 'brand_logo_delete':
         @unlink(ROOT . Maryam\PostRenderer::BRAND_DIR . '/' . (($_POST['which'] ?? '') === 'logo-white' ? 'logo-white.png' : 'logo.png'));
         flash("Logo o'chirildi.");
+        redirect(url(['p' => 'brend']));
+
+    case 'style_refresh':
+        $styleError = refresh_brand_style($ai, $store);
+        flash($styleError ?? 'Uslub qayta tahlil qilindi.', $styleError ? 'error' : 'ok');
         redirect(url(['p' => 'brend']));
 
     case 'brand_colors':

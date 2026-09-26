@@ -17,6 +17,7 @@ final class Prompts
         'copywriter/edit' => 'Copywriter · 3-bosqich: muharrir tahriri',
         'planner/plan' => 'Kontent-strateg: haftalik reja',
         'designer/prompt' => 'Dizayner: vizual va rasm prompti',
+        'designer/style' => 'Dizayner: grid namunalaridan uslub profili',
         'manager/orchestrate' => "Manager: Telegram suhbat va topshiriq berish",
         'trainer/rules' => "O'qituvchi: baholardan qoida chiqarish",
         'trainer/template' => "O'qituvchi: namunadan shablon yasash",

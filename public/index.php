@@ -91,6 +91,7 @@ const PAGES = [
     'katalog' => 'Turlar',
     'bilimlar' => 'Faktlar',
 ];
+// Diqqat: ?d=, ?img=, ?render=, ?asset= — rasm endpointlari; sahifa parametrlari boshqacha nomlansin
 $page = ($_GET['p'] ?? '') === 'home' ? 'oqitish' : (isset(PAGES[$_GET['p'] ?? '']) ? $_GET['p'] : 'studio');
 
 if (($_GET['img'] ?? '') !== '') {
@@ -104,6 +105,28 @@ if (($_GET['img'] ?? '') !== '') {
     } else {
         http_response_code(404);
     }
+    exit;
+}
+
+// Dizayner natijasi: ?d=<natija id>&s=<slayd, 0 = asosiy>[&dl=1] yoki &zip=1 (karusel slaydlari)
+if (isset($_GET['d'])) {
+    $design = $store->resultById((int) $_GET['d']);
+    $files = $design ? array_values(array_filter([$design['card_path'] ?? null, ...($design['slides'] ?? [])])) : [];
+    if (!empty($design['slides'])) {
+        $files = $design['slides'];
+    }
+    $path = isset($_GET['zip']) ? ($design['zip_path'] ?? null) : ($files[(int) ($_GET['s'] ?? 0)] ?? null);
+    $real = $path ? realpath($path) : false;
+    if (!$real || !str_starts_with($real, realpath(ROOT . '/output') . DIRECTORY_SEPARATOR)) {
+        http_response_code(404);
+        exit;
+    }
+    $isZip = str_ends_with($real, '.zip');
+    header('Content-Type: ' . ($isZip ? 'application/zip' : 'image/png'));
+    if ($isZip || isset($_GET['dl'])) {
+        header('Content-Disposition: attachment; filename="maryam-' . (int) $_GET['d'] . '-' . basename($real) . '"');
+    }
+    readfile($real);
     exit;
 }
 
@@ -132,7 +155,7 @@ if (isset($_GET['render']) || isset($_GET['asset'])) {
     if (isset($_GET['dl'])) {
         header('Content-Disposition: attachment; filename="maryam-' . $layout . '-' . (int) ($_GET['i'] ?? 0) . '.png"');
     }
-    echo Maryam\PostRenderer::forBrand($brand)->render($layout, $data, Maryam\PostRenderer::colors($store));
+    echo Maryam\PostRenderer::forBrand($brand, Maryam\Agents\GraphicDesigner::style($store))->render($layout, $data, Maryam\PostRenderer::colors($store));
     exit;
 }
 

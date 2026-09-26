@@ -83,6 +83,122 @@ final class BrandAssets
         return $out;
     }
 
+    /**
+     * Grid namunalaridan brend ranglarini avtomatik aniqlaydi (qo'lda kiritish shart emas):
+     * primary — eng ko'p to'yingan to'q rang (fon/lenta), accent — yorqin, tusi farqli rang (narx),
+     * dark — primary'ning to'q varianti. Oq matn o'qilishi uchun primary yetarlicha to'q qilinadi.
+     * @return array{primary: string, accent: string, dark: string}|null
+     */
+    public static function extractPalette(array $paths): ?array
+    {
+        $buckets = [];
+        foreach ($paths as $path) {
+            $src = @imagecreatefromstring((string) @file_get_contents($path));
+            if (!$src) {
+                continue;
+            }
+            $im = imagecreatetruecolor(60, 75);
+            imagecopyresampled($im, $src, 0, 0, 0, 0, 60, 75, imagesx($src), imagesy($src));
+            for ($x = 0; $x < 60; $x++) {
+                for ($y = 0; $y < 75; $y++) {
+                    $c = imagecolorat($im, $x, $y);
+                    $rgb = [($c >> 16) & 255, ($c >> 8) & 255, $c & 255];
+                    [$h, $sat, $l] = self::hsl(...$rgb);
+                    if ($sat < 0.18 || $l < 0.05 || $l > 0.93) {
+                        continue; // kulrang, oq, qora — brend rangi emas
+                    }
+                    $key = intdiv((int) $h, 20) . ':' . min(4, (int) ($l * 5));
+                    $b = &$buckets[$key];
+                    $b['n'] = ($b['n'] ?? 0) + 1;
+                    $b['s'] = ($b['s'] ?? 0) + $sat;
+                    foreach ([0, 1, 2] as $i) {
+                        $b['c'][$i] = ($b['c'][$i] ?? 0) + $rgb[$i];
+                    }
+                    unset($b);
+                }
+            }
+        }
+        if (!$buckets) {
+            return null;
+        }
+        $cands = [];
+        foreach ($buckets as $b) {
+            $rgb = array_map(static fn ($v) => (int) round($v / $b['n']), $b['c']);
+            [$h, $sat, $l] = self::hsl(...$rgb);
+            $cands[] = ['rgb' => $rgb, 'n' => $b['n'], 'h' => $h, 's' => $sat, 'l' => $l];
+        }
+        $total = array_sum(array_column($cands, 'n'));
+
+        // Primary: ko'p uchraydigan, to'q-o'rta rang (to'q fonlar ustunlik qiladi)
+        usort($cands, static fn ($a, $b) => ($b['n'] * (1.3 - $b['l'])) <=> ($a['n'] * (1.3 - $a['l'])));
+        $primary = $cands[0];
+        // Accent: yorqin va to'yingan, tusi primary'dan uzoq
+        $accent = null;
+        $best = 0.0;
+        foreach ($cands as $c) {
+            $dh = abs($c['h'] - $primary['h']);
+            $dh = min($dh, 360 - $dh);
+            $score = ($c['n'] / $total) * $c['s'] * ($c['l'] > 0.35 ? 1.5 : 0.4) * ($dh >= 35 ? 1 : 0.05);
+            if ($score > $best) {
+                [$best, $accent] = [$score, $c];
+            }
+        }
+        $accentRgb = $accent ? $accent['rgb'] : [201, 152, 47];
+        [$ah, $as, $al] = self::hsl(...$accentRgb);
+        $accentRgb = self::fromHsl($ah, max($as, 0.55), min(max($al, 0.5), 0.62)); // narx plashkasi yorqin bo'lsin
+
+        [$ph, $ps] = [$primary['h'], max($primary['s'], 0.35)];
+        return [
+            'primary' => self::hex(self::fromHsl($ph, $ps, min($primary['l'], 0.26))),
+            'accent' => self::hex($accentRgb),
+            'dark' => self::hex(self::fromHsl($ph, $ps, 0.09)),
+        ];
+    }
+
+    /** Namunalar o'zgarganda ranglarni qayta hisoblab saqlaydi (renderer shularni ishlatadi). */
+    public static function refreshPalette(Store $store): void
+    {
+        $paths = array_filter(array_map(static fn ($n) => self::refPath($n, true), self::refs()));
+        $palette = $paths ? self::extractPalette(array_values($paths)) : null;
+        $store->setMeta('brand_colors_auto', $palette ? (string) json_encode($palette) : '');
+    }
+
+    private static function hsl(int $r, int $g, int $b): array
+    {
+        [$r, $g, $b] = [$r / 255, $g / 255, $b / 255];
+        $max = max($r, $g, $b);
+        $min = min($r, $g, $b);
+        $l = ($max + $min) / 2;
+        if ($max === $min) {
+            return [0.0, 0.0, $l];
+        }
+        $d = $max - $min;
+        $s = $l > 0.5 ? $d / (2 - $max - $min) : $d / ($max + $min);
+        $h = match ($max) {
+            $r => fmod((($g - $b) / $d) + 6, 6),
+            $g => (($b - $r) / $d) + 2,
+            default => (($r - $g) / $d) + 4,
+        } * 60;
+        return [$h, $s, $l];
+    }
+
+    private static function fromHsl(float $h, float $s, float $l): array
+    {
+        $c = (1 - abs(2 * $l - 1)) * $s;
+        $x = $c * (1 - abs(fmod($h / 60, 2) - 1));
+        $m = $l - $c / 2;
+        [$r, $g, $b] = match (true) {
+            $h < 60 => [$c, $x, 0], $h < 120 => [$x, $c, 0], $h < 180 => [0, $c, $x],
+            $h < 240 => [0, $x, $c], $h < 300 => [$x, 0, $c], default => [$c, 0, $x],
+        };
+        return array_map(static fn ($v) => (int) round(($v + $m) * 255), [$r, $g, $b]);
+    }
+
+    private static function hex(array $rgb): string
+    {
+        return sprintf('#%02x%02x%02x', ...$rgb);
+    }
+
     private static function load(string $path): \GdImage
     {
         if (!function_exists('imagecreatefromstring')) {

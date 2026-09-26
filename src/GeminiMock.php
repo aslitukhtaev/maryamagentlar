@@ -25,7 +25,11 @@ class GeminiMock
         self::$lastImages = count($images);
         
         // System prompt'dan agentni aniqlang
-        if (str_contains($system, 'QAYTA ISHLATILADIGAN SHABLON')) {
+        if (str_contains($system, 'uslub tahlilchisisan')) {
+            $data = ['photo_background' => true, 'uppercase_titles' => true, 'title_position' => 'past', 'text_density' => 'kam',
+                     'mood' => 'yorqin, ishonchli', 'preferred_layouts' => ['hot_tour', 'price_list', 'review'],
+                     'recurring_elements' => ['pastda yashil lenta', 'oltin narx plashkasi'], 'notes' => 'Foto fon, qisqa katta sarlavha, narx doim oltin plashkada.'];
+        } elseif (str_contains($system, 'QAYTA ISHLATILADIGAN SHABLON')) {
             $data = $this->mockTemplate();
         } elseif (str_contains($system, "O'QITUVCHISI")) {
             $data = $this->mockRules();
@@ -33,7 +37,15 @@ class GeminiMock
             $data = [
                 'layout' => ['1080x1350', "Sarlavha (yuqori 1/3, oq, qalin): ISTANBUL", "Narx plashkasi (pastki chap, oltin): 775$ dan", "Pastki lenta (to'q yashil): 55-303-22-22 · logotip"],
                 'image_prompt' => 'Galata tower at golden hour, Istanbul rooftops, clean negative space at the top third, no text, no watermark, no typography',
-                'card' => ['layout' => 'hot_tour', 'title' => 'Istanbul', 'subtitle' => 'Har kuni uchish · 5 kun · nonushta', 'price' => '775$ dan', 'label' => 'QAYNOQ TUR', 'cta' => "Direct'ga ISTANBUL deb yozing"],
+                'card' => str_contains($user, '"deliverable_format": "karusel"')
+                    ? ['layout' => 'carousel', 'slides' => [
+                        ['layout' => 'slide_cover', 'title' => 'Istanbulga borishdan oldin bilishingiz kerak bo‘lgan 4 narsa', 'label' => 'ISTANBUL'],
+                        ['layout' => 'tips', 'title' => 'Viza kerak emas', 'text' => "O‘zbekiston fuqarolari 30 kungacha vizasiz."],
+                        ['layout' => 'tips', 'title' => 'Istanbulkart oling', 'text' => 'Metro, tramvay va paromlarda bitta karta.'],
+                        ['layout' => 'hot_tour', 'title' => 'Istanbul', 'subtitle' => 'Har kuni uchish · 5 kun', 'price' => '775$ dan'],
+                        ['layout' => 'slide_cta', 'title' => 'Tur tanlashda yordam kerakmi?', 'text' => "Direct'ga yozing — 10 daqiqada javob", 'button' => "Direct'ga ISTANBUL deb yozing"],
+                    ]]
+                    : ['layout' => str_contains($user, '"deliverable_format": "reels"') ? 'cover' : 'hot_tour', 'title' => 'Istanbul', 'subtitle' => 'Har kuni uchish · 5 kun · nonushta', 'price' => '775$ dan', 'label' => 'QAYNOQ TUR', 'cta' => "Direct'ga ISTANBUL deb yozing"],
                 'alt_text' => "Istanbul, Galata minorasi oqshom yorug'ida",
             ];
         } elseif (str_contains($system, "bo'limining boshlig'isan")) {

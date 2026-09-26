@@ -41,6 +41,18 @@ function csrf_field(): string
     return '<input type="hidden" name="csrf" value="' . csrf_token() . '">';
 }
 
+/** Namunalar o'zgarganda: ranglar (darhol, kod bilan) va uslub profili (AI) qayta hisoblanadi. */
+function refresh_brand_style(object $ai, Maryam\Store $store): ?string
+{
+    Maryam\BrandAssets::refreshPalette($store);
+    try {
+        Maryam\Agents\GraphicDesigner::analyzeStyle($ai, $store);
+        return null;
+    } catch (Throwable $e) {
+        return "AI uslubni tahlil qila olmadi (ranglar baribir aniqlandi): " . $e->getMessage();
+    }
+}
+
 /** Bo'lim sarlavhasi: ikonka + nom + bir gapli tushuntirish. */
 function page_header(string $icon, string $title, string $desc): void
 {
@@ -71,26 +83,52 @@ function type_options(array $tones, bool $withAll = true): array
     return ($withAll ? ['' => 'Barcha yo\'nalishlar'] : []) + array_map(static fn ($t) => $t['label'], $tones);
 }
 
-/** Shu variant uchun dizayner natijasi (maket, rasm, prompt) — bo'lsa. */
+/** Shu variant uchun dizayner natijasi (tayyor rasm/slaydlar) — bo'lsa. */
 function design_block(int $briefId, int $variantId): void
 {
     global $store;
-    $design = $store->result($briefId, 'designer', "variant_$variantId");
-    if (!$design) {
-        return;
+    $design = $store->latestResultRow($briefId, 'designer', "variant_$variantId");
+    if ($design) {
+        echo '<div class="design">';
+        design_view($design);
+        echo '</div>';
     }
-    ?>
-    <details class="design" open><summary><b>Dizayn</b></summary>
-      <?php if (!empty($design['card_path'])): ?>
-        <a href="<?= e(url(['img' => $briefId, 'v' => $variantId, 'card' => 1])) ?>" download="post-<?= $variantId ?>.png">
-          <img src="<?= e(url(['img' => $briefId, 'v' => $variantId, 'card' => 1])) ?>" alt="Tayyor rasm" style="max-width:360px;width:100%;border-radius:8px;margin-top:8px;display:block"></a>
-        <p class="small muted" style="margin:4px 0 0">Tayyor rasm — bosing va yuklab oling (1080×1350).</p>
-      <?php elseif ($design['image_generated']): ?><img src="<?= e(url(['img' => $briefId, 'v' => $variantId])) ?>" alt="<?= e($design['alt_text']) ?>" style="max-width:100%;border-radius:8px;margin-top:8px"><?php endif; ?>
-      <?php if (!empty($design['layout'])): ?><p class="small muted" style="margin:8px 0 2px">Maket (dizayner yoki Canva uchun):</p><ul class="small"><?php foreach ($design['layout'] as $l): ?><li><?= e($l) ?></li><?php endforeach; ?></ul><?php endif; ?>
-      <p class="small muted" style="margin:8px 0 2px">Fon rasmi uchun tavsif<?= $design['image_generated'] ? '' : " (rasm generatsiya bo'lmadi — boshqa vositada ishlating)" ?>:</p>
-      <pre class="block"><?= e($design['image_prompt']) ?></pre>
-    </details>
-    <?php
+}
+
+/** Dizayner natijasi: bitta rasm yoki karusel lentasi + yuklab olish tugmalari. */
+function design_view(array $design): void
+{
+    $id = (int) $design['id'];
+    $slides = $design['slides'] ?? [];
+    $count = $slides ? count($slides) : (!empty($design['card_path']) ? 1 : 0);
+    if (!$count) {
+        echo '<p class="warn">Tayyor rasm chizilmadi.</p>';
+    } else {
+        echo '<div class="slides' . ($slides ? ' carousel' : '') . '">';
+        for ($i = 0; $i < $count; $i++) {
+            $src = e(url(['d' => $id, 's' => $i]));
+            $dl = e(url(['d' => $id, 's' => $i, 'dl' => 1]));
+            echo "<a href=\"$dl\" title=\"Yuklab olish\"><img src=\"$src\" alt=\"" . ($slides ? ($i + 1) . '-slayd' : 'Tayyor rasm') . "\" loading=\"lazy\">"
+               . ($slides ? '<span>' . ($i + 1) . '/' . $count . '</span>' : '') . '</a>';
+        }
+        echo '</div><div class="actions">';
+        if ($slides && !empty($design['zip_path'])) {
+            echo '<a class="upload-btn" href="' . e(url(['d' => $id, 'zip' => 1])) . "\">⬇ Hammasini yuklab olish ($count ta slayd, ZIP)</a>";
+        } elseif (!$slides) {
+            echo '<a class="upload-btn" href="' . e(url(['d' => $id, 's' => 0, 'dl' => 1])) . '">⬇ Yuklab olish (1080×1350)</a>';
+        }
+        echo '</div>';
+    }
+    if (!empty($design['layout']) || !empty($design['image_prompt'])) {
+        echo '<details class="small" style="margin-top:8px"><summary class="muted">Dizayner uchun tafsilotlar (maket, fon tavsifi)</summary>';
+        if (!empty($design['layout'])) {
+            echo '<ul>' . implode('', array_map(static fn ($l) => '<li>' . e($l) . '</li>', (array) $design['layout'])) . '</ul>';
+        }
+        if (!empty($design['image_prompt'])) {
+            echo '<pre class="block">' . e($design['image_prompt']) . '</pre>';
+        }
+        echo '</details>';
+    }
 }
 
 /** O'chirish formasi — tasdiq bilan. */

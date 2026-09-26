@@ -15,3 +15,6 @@ if [ "$before" != "$after" ]; then
         systemctl restart maryam-bot
     fi
 fi
+
+# Kerakli modullar va sozlamalar (masalan php-gd) — yetishmasa o'zi o'rnatadi
+bash "$APP/deploy/ensure.sh" || true
