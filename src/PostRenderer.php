@@ -234,15 +234,16 @@ final class PostRenderer
         $cw = (int) ($this->w / $scale);
         $ch = (int) ($this->h / $scale);
         imagecopyresampled($this->img, $src, 0, 0, (int) (($sw - $cw) / 2), (int) (($sh - $ch) / 2), $this->w, $this->h, $cw, $ch);
-        // Logo va yozuv har qanday fonda o'qilsin — yengil soya
-        $this->gradient(0, 150, $this->c['dark'], 60, 127);
-        $this->gradient($this->h - 130, $this->h, $this->c['dark'], 127, 40);
-        $this->logo((int) ($this->w / 2), 58, 'center', 60, 180);
+        // Logo — chap yuqori burchakdagi toza "belgi" (plashka) ichida: har qanday fonda o'qiladi va rasm matni bilan urishmaydi
+        $this->logoBadge(self::M - 28, 36);
+        // Telefon — faqat sotuv postida, o'ng pastki burchakda plashkada
         $line = $this->clean($bottomText);
         if ($line !== '') {
-            $f = $this->fit($line, 'SemiBold', 30, 22, $this->w - 2 * self::M, 1);
-            $lw = $this->width($f['lines'][0], 'SemiBold', $f['size']);
-            $this->text($f['lines'][0], 'SemiBold', $f['size'], (int) (($this->w - $lw) / 2), $this->h - 40, $this->c['light']);
+            $f = $this->fit($line, 'Bold', 28, 20, 520, 1);
+            $lw = $this->width($f['lines'][0], 'Bold', $f['size']);
+            $x2 = $this->w - self::M + 28;
+            $this->roundRect($x2 - $lw - 44, $this->h - 100, $x2, $this->h - 42, 29, $this->alpha('dark', 105));
+            $this->text($f['lines'][0], 'Bold', $f['size'], $x2 - $lw - 22, $this->h - 71 + (int) ($f['size'] * 0.5), $this->c['light']);
         }
         ob_start();
         imagejpeg($this->img, null, 92);
@@ -495,6 +496,27 @@ final class PostRenderer
             $lw = $this->width($f['lines'][0], 'SemiBold', $f['size']);
             $this->text($f['lines'][0], 'SemiBold', $f['size'], (int) (($this->w - $lw) / 2), $this->h - 42, $this->alpha('light', $sales ? 127 : 100));
         }
+    }
+
+    /** Logo plashkada: oq logo — to'q shaffof plashkada, rangli logo — oq plashkada; logo yo'q — so'z-belgi. */
+    private function logoBadge(int $x, int $y): void
+    {
+        $white = $this->logoWhitePath && is_file($this->logoWhitePath);
+        $path = $white ? $this->logoWhitePath : ($this->logoPath && is_file($this->logoPath) ? $this->logoPath : null);
+        $logo = $path ? @imagecreatefromstring((string) file_get_contents(BrandAssets::cleanLogo($path))) : false;
+        [$padX, $padY, $maxH, $maxW] = [22, 12, 52, 210];
+        if ($logo) {
+            $scale = min($maxH / imagesy($logo), $maxW / imagesx($logo));
+            [$lw, $lh] = [(int) (imagesx($logo) * $scale), (int) (imagesy($logo) * $scale)];
+            $this->roundRect($x, $y, $x + $lw + 2 * $padX, $y + $lh + 2 * $padY, 18, $white ? $this->alpha('dark', 100) : imagecolorallocatealpha($this->img, 255, 255, 255, 8));
+            imagealphablending($this->img, true);
+            imagecopyresampled($this->img, $logo, $x + $padX, $y + $padY, 0, 0, $lw, $lh, imagesx($logo), imagesy($logo));
+            return;
+        }
+        $name = mb_strtoupper(explode(' ', (string) ($this->brand['name'] ?? 'MARYAM'))[0]);
+        $nw = $this->width($name, 'Display', 30);
+        $this->roundRect($x, $y, $x + $nw + 2 * $padX, $y + 64, 18, $this->alpha('dark', 100));
+        $this->text($name, 'Display', 30, $x + $padX, $y + 44, $this->c['accent']);
     }
 
     private function logo(int $x, int $centerY, string $align, int $maxH, int $maxW): void

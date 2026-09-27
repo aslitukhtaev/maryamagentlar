@@ -172,6 +172,7 @@ final class GraphicDesigner
         }
         $say('3/3 Rasmlardagi yozuvlar tekshirilmoqda...');
         $result['variants'] = $this->checkTexts($result['variants'], $briefId);
+        $result['variants'] = $this->autoFix($result['variants'], $result, $briefId, $say);
         // Yozuvi to'g'ri chiqqanlar birinchi
         usort($result['variants'], static fn ($a, $b) => (int) (($b['check']['ok'] ?? true) === true) <=> (int) (($a['check']['ok'] ?? true) === true));
         $result['card_path'] = $result['variants'][0]['path'];
@@ -199,7 +200,7 @@ final class GraphicDesigner
         $style = $plan['concepts'][0]['prompt'] ?? '';
         $job = function (int $i, array $extraImages) use ($slides, $n, $style, $refs, $photos, $result) {
             $s = $slides[$i];
-            $role = $i === 0 ? 'COVER slide: a strong hook that makes people swipe; add a small "swipe →" hint'
+            $role = $i === 0 ? 'COVER slide: a strong hook that makes people swipe'
                 : ($i === $n - 1 ? 'LAST slide: call to action' : 'content slide: one idea, clean and readable');
             $lock = $extraImages ? ' The LAST attached image is slide 1 of this same carousel: copy its exact visual system — fonts, colours, text treatment, graphic elements — so all slides look like one series.' : '';
             return ['prompt' => $this->posterPrompt(['Headline' => $s['headline'], 'Sub-line' => $s['subline']],
@@ -229,6 +230,7 @@ final class GraphicDesigner
         ksort($items);
         $say('3/3 Slaydlardagi yozuvlar tekshirilmoqda...');
         $items = $this->checkTexts(array_values($items), $briefId);
+        $items = $this->autoFix($items, $result, $briefId, $say);
         $result['slide_meta'] = $items;
         $result['slides'] = array_column($items, 'path');
         $result['card_path'] = $result['slides'][0];
@@ -247,24 +249,27 @@ final class GraphicDesigner
         $colors = PostRenderer::colors($this->store);
         $style = self::style($this->store);
         $canvas = $format === 'reels' ? 'vertical 9:16 Instagram Stories/Reels cover' : 'vertical 4:5 Instagram feed post';
-        $p = "Design a finished, scroll-stopping $canvas for \"Maryam Travel\", a travel agency in Uzbekistan. It must look like a professional designer made it for this brand's feed.\n";
+        $p = "Create a finished, scroll-stopping $canvas for \"Maryam Travel\", a travel agency in Uzbekistan. It must look like the work of a top Instagram travel designer — bright, real, emotional.\n";
+        $p .= "PHOTOGRAPHY FIRST: the main visual is a vivid, bright, sunny, natural REAL photograph (destination, hotel, beach, city, happy travellers) filling the whole canvas. "
+            . "NOT a 3D render, NOT CGI, NOT stock icons: no 3D gold coins, credit cards, calculators, podiums, abstract objects or dark empty studio backgrounds. Avoid dark, gloomy, low-contrast looks.\n";
         if ($nRefs) {
-            $p .= "STYLE: The first $nRefs attached image(s) are screenshots of the agency's own Instagram grid. Match that visual language closely — bold condensed uppercase headlines in white or yellow with strong outline/shadow, vivid real photography, people with genuine emotion, sticker-like badges, flags and icons, energetic but clean composition. Do NOT copy any text, faces or logos from these screenshots.\n";
+            $p .= "STYLE REFERENCE: the first $nRefs attached image(s) are screenshots of the agency's own Instagram grid. Match that visual language — real people and places, huge bold condensed uppercase headlines in white or yellow with a thick outline or strong shadow placed directly on the photo, small sticker-like badges and flags, energetic but clean. Do NOT copy any text, faces or logos from these screenshots.\n";
         }
         if ($nPhotos) {
-            $p .= "PEOPLE: The next $nPhotos attached photo(s) show real people from our team/clients. Use these exact people as the main subject — keep face, identity, skin tone and body realistic and unchanged; cut them out and compose them naturally into the scene with matching light.\n";
+            $p .= "PEOPLE: the next $nPhotos attached photo(s) show real people from our team/clients. Use these exact people as the hero — keep face, identity, skin tone and body realistic and unchanged; cut them out and place them naturally in the scene with matching light.\n";
         }
-        $p .= "Brand colours for accents: deep green {$colors['primary']} and gold {$colors['accent']}.";
+        $p .= "Brand colours deep green {$colors['primary']} and gold {$colors['accent']} ONLY as small accents (price badge, underline, sticker) — never as a big flat background.";
         if (!empty($style['mood'])) {
             $p .= " Mood: {$style['mood']}.";
         }
         $p .= "\nART DIRECTION: $concept\n";
         $lines = array_filter($texts, static fn ($t) => trim((string) $t) !== '');
-        $p .= "TEXT ON THE IMAGE — render exactly these texts, spelled letter-for-letter in Uzbek Latin script, and no other words:\n";
+        $p .= "TEXT ON THE IMAGE — render exactly these texts, spelled letter-for-letter in Uzbek Latin script (keep apostrophes as in O‘ and G‘), and no other words at all:\n";
         foreach ($lines as $label => $t) {
             $p .= "- $label: \"" . trim((string) $t) . "\"\n";
         }
-        $p .= "RULES: text large, sharp, high-contrast and fully inside the frame; no extra words, no fake letters, no phone numbers, no website, no logo, no watermark, no Instagram interface. Keep the top 9% and the bottom 7% of the canvas free of text (the real logo and contacts are added there later).";
+        $p .= "RULES: text very large, sharp, high-contrast, fully inside the frame. Do NOT write the brand name, any logo, Instagram handle, phone number, website, \"swipe\" or arrows, or any extra words. "
+            . "Keep the top-left corner (about 25% of the width × 10% of the height) and the bottom-right corner (about 45% × 8%) free of text and faces — a logo badge and contacts are placed there later.";
         return $p;
     }
 
@@ -317,6 +322,50 @@ final class GraphicDesigner
         return $items;
     }
 
+    /**
+     * Yozuvida xato topilgan rasmlar egasiga ko'rsatilishidan oldin bir marta avtomatik tuzatiladi
+     * (rasm modeli faqat yozuvni to'g'rilaydi). Tuzatilgani ham xato bo'lsa — yaxshirog'i qoladi.
+     */
+    private function autoFix(array $items, array $result, int $briefId, callable $say): array
+    {
+        $bad = array_filter($items, static fn ($it) => ($it['check']['ok'] ?? true) === false && is_file((string) ($it['raw'] ?? '')));
+        if (!$bad || Env::get('DESIGN_AUTOFIX', '1') === '0') {
+            return $items;
+        }
+        $say('3/3 ' . count($bad) . " ta rasmda yozuv xatosi — AI o'zi tuzatmoqda...");
+        $jobs = [];
+        foreach ($bad as $i => $it) {
+            $jobs[$i] = $this->editJob($it, (string) (($it['check']['fix'] ?? '') ?: 'Fix the spelling of all text on the image'), $result['format']);
+        }
+        $fixed = [];
+        foreach ($this->ai->generateImages($jobs) as $i => $img) {
+            if (is_array($img)) {
+                $fixed[$i] = $this->saveImage($img, $result, $items[$i]['concept'], $items[$i]['texts'], $briefId);
+            }
+        }
+        if (!$fixed) {
+            return $items;
+        }
+        $checked = $this->checkTexts(array_values($fixed), $briefId);
+        foreach (array_keys($fixed) as $n => $i) {
+            $items[$i] = $checked[$n] + ['autofixed' => true];
+        }
+        return $items;
+    }
+
+    /** Rasmni tahrirlash topshirig'i (tuzatish uchun): asl rasm + faqat aytilgan o'zgarish. */
+    private function editJob(array $item, string $instruction, string $format): array
+    {
+        $texts = array_filter($item['texts'] ?? []);
+        $prompt = "Edit the attached image, a finished Instagram post. Apply ONLY this change (the request may be in Uzbek): \"$instruction\". "
+            . "Keep everything else identical — composition, people and faces, colours, fonts and all other text. "
+            . ($texts ? 'All text on the image must be spelled exactly: ' . implode(' | ', array_map(static fn ($t) => "\"$t\"", $texts)) . '. ' : '')
+            . 'Do not add a logo, brand name, phone number, website or watermark.';
+        $raw = (string) file_get_contents($item['raw']);
+        return ['prompt' => $prompt, 'aspect' => $format === 'reels' ? '9:16' : '4:5',
+                'images' => [['mime' => str_ends_with($item['raw'], '.png') ? 'image/png' : 'image/jpeg', 'data' => base64_encode($raw)]]];
+    }
+
     // ==================== TANLASH VA TUZATISH ====================
 
     public function choose(int $resultId, int $index): array
@@ -347,14 +396,7 @@ final class GraphicDesigner
         if ($instruction === '') {
             throw new \InvalidArgumentException('Nimani o\'zgartirish kerakligini yozing.');
         }
-        $texts = array_filter($item['texts'] ?? []);
-        $prompt = "Edit the attached image, a finished Instagram post. Apply ONLY this change (the request may be in Uzbek): \"$instruction\". "
-            . "Keep everything else identical — composition, people and faces, colours, fonts and all other text. "
-            . ($texts ? 'All text on the image must stay spelled exactly: ' . implode(' | ', array_map(static fn ($t) => "\"$t\"", $texts)) . '. ' : '')
-            . 'Do not add a logo, phone number, website or watermark.';
-        $raw = (string) file_get_contents($item['raw']);
-        $img = $this->ai->generateImages([['prompt' => $prompt, 'aspect' => $d['format'] === 'reels' ? '9:16' : '4:5',
-            'images' => [['mime' => str_ends_with($item['raw'], '.png') ? 'image/png' : 'image/jpeg', 'data' => base64_encode($raw)]]]])[0];
+        $img = $this->ai->generateImages([$this->editJob($item, $instruction, $d['format'])])[0];
         if (is_string($img)) {
             throw new RuntimeException('AI tuzata olmadi: ' . $img);
         }
@@ -447,11 +489,25 @@ final class GraphicDesigner
                 $slides[] = ['headline' => $str($s['headline']), 'subline' => $str($s['subline'] ?? ''), 'prompt' => trim((string) ($s['prompt'] ?? ''))];
             }
         }
+        foreach ($slides as $k => $sl) {
+            $slides[$k]['subline'] = self::shortLine($sl['subline']);
+        }
         return [
-            'headline' => $str($data['headline'] ?? ''), 'subline' => $str($data['subline'] ?? ''),
+            'headline' => $str($data['headline'] ?? ''), 'subline' => self::shortLine($str($data['subline'] ?? '')),
             'price' => $str($data['price'] ?? ''), 'badge' => $str($data['badge'] ?? ''),
             'concepts' => $concepts, 'slides' => $slides, 'alt_text' => trim((string) ($data['alt_text'] ?? '')),
         ];
+    }
+
+    /** AI uzun matnni buzib yozadi: qo'shimcha qator 7 so'zdan oshmasin (birinchi bo'lagi olinadi, bo'lmasa tashlanadi). */
+    private static function shortLine(string $line): string
+    {
+        $words = static fn ($t) => count(preg_split('/\s+/u', trim($t), -1, PREG_SPLIT_NO_EMPTY));
+        if ($words($line) <= 7) {
+            return $line;
+        }
+        $first = trim((string) preg_split('/\s*[·—–,.;:!?]\s*|\s+vs\s+/u', $line)[0]);
+        return $words($first) <= 7 && $words($first) >= 2 ? $first : '';
     }
 
     /** @return array<string, string> rasmga yoziladigan matnlar */
@@ -463,12 +519,12 @@ final class GraphicDesigner
         ], static fn ($t) => $t !== '');
     }
 
-    /** Pastki yozuv: sotuv posti (narx bor) — telefon, qolganlari — Instagram manzili. */
+    /** Pastki yozuv: faqat sotuv posti (narx bor yoki reklama) — telefon. */
     private function bottomText(array $result): string
     {
         $phone = trim((string) preg_replace('/\s*\(.*?\)/u', '', (string) ($this->brand['phone'] ?? '')));
         $sales = ($result['price'] ?? '') !== '' || ($result['format'] ?? '') === 'reklama';
-        return $sales && $phone !== '' ? $phone : (string) ($this->brand['instagram'] ?? $phone);
+        return $sales ? $phone : ''; // oddiy postda pastki burchak bo'sh qoladi (rasm toza ko'rinsin)
     }
 
     private function topic(int $briefId): string

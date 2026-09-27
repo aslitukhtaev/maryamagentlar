@@ -190,8 +190,10 @@ function design_view(array $design): void
         }
     }
     if (!empty($design['layout'])) {
+        $models = array_values(array_unique(array_filter(array_column(array_merge($variants, $design['slide_meta'] ?? []), 'model'))));
         echo '<details class="small" style="margin-top:8px"><summary class="muted">Art-direktor konseptlari</summary><ul>'
-           . implode('', array_map(static fn ($l) => '<li>' . e($l) . '</li>', (array) $design['layout'])) . '</ul></details>';
+           . implode('', array_map(static fn ($l) => '<li>' . e($l) . '</li>', (array) $design['layout'])) . '</ul>'
+           . ($models ? '<p class="muted">Rasm modeli: ' . e(implode(', ', $models)) . '</p>' : '') . '</details>';
     }
 }
 

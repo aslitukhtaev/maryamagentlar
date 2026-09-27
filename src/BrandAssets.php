@@ -273,6 +273,89 @@ final class BrandAssets
         return sprintf('#%02x%02x%02x', ...$rgb);
     }
 
+    /**
+     * Oq fonli logo (JPG yoki shaffof bo'lmagan PNG) — chetdan boshlab oq fon shaffof qilinadi
+     * (logoning ichidagi oq qismlar saqlanadi). Natija keshlanadi: logo.clean.png.
+     */
+    public static function cleanLogo(string $path): string
+    {
+        $clean = preg_replace('/\.png$/', '', $path) . '.clean.png';
+        if (is_file($clean) && filemtime($clean) >= filemtime($path)) {
+            return $clean;
+        }
+        $im = @imagecreatefromstring((string) file_get_contents($path));
+        if (!$im) {
+            return $path;
+        }
+        imagepalettetotruecolor($im);
+        $im = self::fit2($im, 800);
+        $w = imagesx($im);
+        $h = imagesy($im);
+        $alpha = static fn ($c) => ($c >> 24) & 0x7F;
+        // Burchaklar allaqachon shaffof — tozalash kerak emas
+        $corners = [imagecolorat($im, 0, 0), imagecolorat($im, $w - 1, 0), imagecolorat($im, 0, $h - 1), imagecolorat($im, $w - 1, $h - 1)];
+        if (count(array_filter($corners, static fn ($c) => $alpha($c) > 100)) >= 3) {
+            @copy($path, $clean);
+            return $clean;
+        }
+        $light = static function (int $c): bool {
+            [$r, $g, $b] = [($c >> 16) & 255, ($c >> 8) & 255, $c & 255];
+            return min($r, $g, $b) > 215 && max($r, $g, $b) - min($r, $g, $b) < 30;
+        };
+        imagealphablending($im, false);
+        imagesavealpha($im, true);
+        $clear = imagecolorallocatealpha($im, 255, 255, 255, 127);
+        $seen = [];
+        $queue = new \SplQueue();
+        for ($x = 0; $x < $w; $x++) {
+            $queue->enqueue([$x, 0]);
+            $queue->enqueue([$x, $h - 1]);
+        }
+        for ($y = 0; $y < $h; $y++) {
+            $queue->enqueue([0, $y]);
+            $queue->enqueue([$w - 1, $y]);
+        }
+        while (!$queue->isEmpty()) {
+            [$x, $y] = $queue->dequeue();
+            $k = $y * $w + $x;
+            if (isset($seen[$k])) {
+                continue;
+            }
+            $seen[$k] = true;
+            if (!$light(imagecolorat($im, $x, $y))) {
+                continue;
+            }
+            imagesetpixel($im, $x, $y, $clear);
+            foreach ([[1, 0], [-1, 0], [0, 1], [0, -1]] as [$dx, $dy]) {
+                $nx = $x + $dx;
+                $ny = $y + $dy;
+                if ($nx >= 0 && $ny >= 0 && $nx < $w && $ny < $h && !isset($seen[$ny * $w + $nx])) {
+                    $queue->enqueue([$nx, $ny]);
+                }
+            }
+        }
+        $im = self::trimTransparent($im);
+        imagealphablending($im, false);
+        imagesavealpha($im, true);
+        imagepng($im, $clean);
+        return $clean;
+    }
+
+    private static function fit2(\GdImage $im, int $max): \GdImage
+    {
+        $w = imagesx($im);
+        $h = imagesy($im);
+        $scale = min(1, $max / max($w, $h));
+        if ($scale >= 1) {
+            return $im;
+        }
+        $out = imagecreatetruecolor((int) round($w * $scale), (int) round($h * $scale));
+        imagealphablending($out, false);
+        imagesavealpha($out, true);
+        imagecopyresampled($out, $im, 0, 0, 0, 0, imagesx($out), imagesy($out), $w, $h);
+        return $out;
+    }
+
     /** Shaffof chetlarni kesadi (ko'rinadigan piksellar chegarasi bo'yicha). */
     private static function trimTransparent(\GdImage $im): \GdImage
     {
