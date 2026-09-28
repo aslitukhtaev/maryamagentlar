@@ -281,7 +281,17 @@ final class GraphicDesigner
         $say('4/4 ' . count($jobs) . ' ta slayd muqova uslubida chizilmoqda...');
         $drawn = [];
         $errors = [];
-        foreach ($jobs ? $this->ai->generateImages($jobs) : [] as $i => $img) {
+        $got = $jobs ? $this->ai->generateImages($jobs) : [];
+        // Chizilmay qolganlari (masalan model matn qaytardi) — yana 2 marta urinib ko'riladi, egasiga xato ko'rsatmaslik uchun
+        for ($round = 1; $round <= 2; $round++) {
+            $again = array_filter($got, 'is_string');
+            if (!$again) {
+                break;
+            }
+            $say('4/4 ' . count($again) . ' ta slayd qayta chizilmoqda...');
+            $got = array_replace($got, $this->ai->generateImages(array_intersect_key($jobs, $again)));
+        }
+        foreach ($got as $i => $img) {
             if (is_string($img)) {
                 // Bitta slayd chizilmasa ham tayyorlari saqlanadi — keyin faqat shu slayd qayta chiziladi
                 $errors[] = $img;

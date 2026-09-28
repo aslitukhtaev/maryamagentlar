@@ -53,8 +53,8 @@ final class WebJobs
             return ['status' => 'missing'];
         }
         $status = $job['status'];
-        // Fon jarayoni o'lib qolgan bo'lsa (30 daqiqadan oshdi) — osilib qolmasin
-        $stale = $store->db->prepare("SELECT created_at < datetime('now', 'localtime', '-30 minutes') FROM jobs WHERE id = ?");
+        // Fon jarayoni o'lib qolgan bo'lsa (60 daqiqadan oshdi) — osilib qolmasin
+        $stale = $store->db->prepare("SELECT created_at < datetime('now', 'localtime', '-60 minutes') FROM jobs WHERE id = ?");
         $stale->execute([$id]);
         if (in_array($status, ['queued', 'running'], true) && (int) $stale->fetchColumn() === 1) { // vaqtni SQLite o'zi solishtiradi (vaqt zonasi farqi yo'q)
             $status = 'failed';
@@ -87,6 +87,7 @@ final class WebJobs
         $this->store->startJob($id);
         $p = $job['payload'];
         $progress = fn (string $m) => $this->store->setMeta("job:$id:progress", $m);
+        self::patient($this->ai, $progress);
         try {
             [$url, $flash] = match ($job['type']) {
                 'web_run' => $this->copywriter($p, $progress),
@@ -106,6 +107,21 @@ final class WebJobs
         } catch (Throwable $e) {
             $this->store->setMeta("job:$id:url", (string) ($p['return'] ?? ''));
             $this->store->finishJob($id, 'failed', $e->getMessage());
+        }
+    }
+
+    /**
+     * Fon ishida xato o'rniga KUTISH: Google rasm limiti to'lsa, 25 daqiqagacha kutib davom etiladi,
+     * egasi esa lentada nima bo'layotganini ko'radi.
+     */
+    public static function patient(object $ai, callable $progress): void
+    {
+        if (property_exists($ai, 'waitBudget')) {
+            $ai->waitBudget = 1500.0;
+            $ai->onWait = static function (float $sec, int $done, int $total) use ($progress): void {
+                $progress("Google rasm chizish navbati band — " . max(1, (int) round($sec)) . " soniya kutib davom etamiz"
+                    . ($total > 1 ? " ($done/$total tayyor)" : '') . '. Hech narsa qilish shart emas.');
+            };
         }
     }
 

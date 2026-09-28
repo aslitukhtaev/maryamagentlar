@@ -17,6 +17,12 @@ class GeminiVertex
 {
     private const URL = 'https://%s-aiplatform.googleapis.com/v1beta1/projects/%s/locations/%s/publishers/google/models/%s:generateContent';
 
+    /** Rasm limiti (429) uchun jami kutish chegarasi, soniya. Fon ishlarida katta qilinadi (xato emas — kutish). */
+    public float $waitBudget = 90.0;
+
+    /** Kutish paytida chaqiriladi: fn(float $soniya, int $tayyor, int $jami) — egasiga holat ko'rsatish uchun. */
+    public ?\Closure $onWait = null;
+
     public function __construct(
         private string $projectId,
         private string $location = 'us-central1', // yoki 'europe-west1' / 'us-west1'
@@ -112,15 +118,19 @@ class GeminiVertex
         $results = [];
         $lastError = [];
         $pending = array_keys($jobs);
-        // Rasm modellarining daqiqalik limiti kichik: bir vaqtda ko'pi bilan N ta so'rov, limitga tegsa (429) kutib qayta
+        // Rasm modellarining daqiqalik limiti kichik: bir vaqtda ko'pi bilan N ta so'rov, limitga tegsa (429) yoki
+        // model band bo'lsa (500/503) — kutib qayta. Fon ishlarida kutish chegarasi katta: xato emas, kutish.
         $parallel = max(1, (int) Env::get('VERTEX_IMAGE_PARALLEL', '2'));
         $base = (float) Env::get('VERTEX_RETRY_BASE', '8');
-        $budget = 90.0; // jami kutish chegarasi (soniya) — sahifa cheksiz osilib qolmasin
+        $budget = $this->waitBudget;
         $trail = [];
-        foreach (self::imageModels($this->location) as [$model, $location]) {
+        $models = self::imageModels($this->location);
+        foreach ($models as $mi => [$model, $location]) {
             if (!$pending) {
                 break;
             }
+            $isLast = $mi === count($models) - 1;
+            $worked = false; // bu model shu chaqiruvda hech bo'lmasa bitta rasm chizdimi (demak kvota bor — kutish arziydi)
             $next = [];
             $queue = $pending;
             $tries = [];
@@ -132,9 +142,11 @@ class GeminiVertex
                         preg_match('/\((\d{3})\)/', $r, $code);
                         $trail[$i][$model] = $code[1] ?? 'xato'; // qaysi model nima qaytargani (xato xabarida ko'rsatiladi)
                     }
+                    $busy = is_string($r) && preg_match('/\((429|500|503)\)/', $r);
                     if (is_array($r)) {
                         $results[$i] = $r;
-                    } elseif (str_contains($r, '(429)') && $budget > 0 && ($tries[$i] = ($tries[$i] ?? 0) + 1) <= 4) {
+                        $worked = true;
+                    } elseif ($busy && $budget > 0 && (($tries[$i] = ($tries[$i] ?? 0) + 1) <= 3 || $worked || $isLast)) {
                         [$lastError[$i], $limited[]] = [$r, $i];
                     } elseif (preg_match('/\((400|404|429|500|503)\)|faqat matn|qaytarmadi/u', $r)) {
                         [$lastError[$i], $next[]] = [$r, $i]; // boshqa model bilan urinib ko'ramiz
@@ -147,8 +159,12 @@ class GeminiVertex
                     }
                 }
                 if ($limited) {
-                    $wait = min($budget, 60, $base * 2 ** (max(array_intersect_key($tries, array_flip($limited))) - 1));
-                    $budget -= max($wait, 0.001);
+                    $parallel = 1; // limitga tegdik — endi birma-bir
+                    $wait = min($budget, 60, $base * 2 ** (min(6, max(array_intersect_key($tries, array_flip($limited)))) - 1));
+                    $budget -= max($wait, 1.0); // har urinish kamida 1 s hisoblanadi — cheksiz aylanmasin
+                    if ($this->onWait) {
+                        ($this->onWait)($wait, count($results), count($jobs));
+                    }
                     usleep((int) ($wait * 1e6));
                     array_unshift($queue, ...$limited);
                 }

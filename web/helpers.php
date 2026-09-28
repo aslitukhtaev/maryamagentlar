@@ -179,7 +179,7 @@ function design_view(array $design): void
         foreach ($design['slides'] as $i => $f) {
             $meta = $design['slide_meta'][$i] ?? null;
             if (!empty($meta['failed'])) {
-                echo '<div class="slide"><div class="slide-missing">⚠ ' . ($i + 1) . '-slayd chizilmadi</div></div>';
+                echo '<div class="slide"><div class="slide-missing">' . ($i + 1) . '-slayd hali tayyor emas</div></div>';
                 continue;
             }
             echo '<div class="slide"><a href="' . e(url(['d' => $id, 's' => $i, 'dl' => 1])) . '" title="Yuklab olish"><img src="' . e(url(['d' => $id, 's' => $i])) . '" alt="' . ($i + 1) . '-slayd" loading="lazy"></a>'
@@ -188,9 +188,9 @@ function design_view(array $design): void
         }
         echo '</div>';
         if (!empty($design['missing'])) {
-            echo '<p class="warn">' . count($design['missing']) . ' ta slayd chizilmadi' . (!empty($design['rest_error']) ? ' (' . e(mb_strimwidth(ai_error_text((string) $design['rest_error']), 0, 140, '…')) . ')' : '') . '. Tayyorlari saqlandi.</p>'
+            echo '<p class="small muted">' . count($design['missing']) . ' ta slayd hali tayyor emas. Tugmani bosing — tizim ularni navbat bilan, kerak bo\'lsa kutib chizadi.</p>'
                . '<form method="post" ' . busy_attr() . '>' . csrf_field() . '<input type="hidden" name="action" value="design_redraw"><input type="hidden" name="id" value="' . $id . '">'
-               . '<input type="hidden" name="return" value="' . e($return) . '"><button type="submit" class="primary-btn">🔁 Chizilmagan slaydlarni qayta chizish</button>'
+               . '<input type="hidden" name="return" value="' . e($return) . '"><button type="submit" class="primary-btn">🎨 Qolgan slaydlarni chizish</button>'
                . '<span class="busy muted small" hidden>Chizilmoqda…</span></form>';
         }
     } elseif (!$variants && $files) { // eski natijalar (shablon)

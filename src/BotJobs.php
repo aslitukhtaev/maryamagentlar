@@ -67,6 +67,7 @@ final class BotJobs
             }
         };
 
+        WebJobs::patient($this->ai, $progress); // limitda xato emas — kutib davom etadi
         try {
             $done = match ($job['type']) {
                 'post' => $this->post($tg, $p['brief'], (int) ($p['template_id'] ?? 0), $progress),

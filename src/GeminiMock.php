@@ -16,6 +16,9 @@ class GeminiMock
     ) {
     }
 
+    public float $waitBudget = 90.0;
+    public ?\Closure $onWait = null;
+
     /** Oxirgi so'rovga ilova qilingan rasmlar soni (testlar uchun). */
     public static int $lastImages = 0;
 
@@ -32,6 +35,12 @@ class GeminiMock
         $out = [];
         foreach ($jobs as $i => $job) {
             self::$imageJobs[] = ['prompt' => $job['prompt'], 'images' => count($job['images'] ?? []), 'aspect' => $job['aspect'] ?? '4:5'];
+            static $once = [];
+            if (($f1 = getenv('AI_MOCK_FAIL_ONCE')) && str_contains($job['prompt'], "Slide $f1 of") && !isset($once[$f1])) {
+                $once[$f1] = true;
+                $out[$i] = 'Model (mock) rasm emas, faqat matn qaytardi (STOP).';
+                continue;
+            }
             if (($fail = getenv('AI_MOCK_FAIL_SLIDE')) && str_contains($job['prompt'], "Slide $fail of")) {
                 $out[$i] = 'Vertex AI xatosi (429) [mock]: Resource exhausted';
                 continue;
