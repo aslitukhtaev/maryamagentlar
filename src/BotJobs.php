@@ -30,7 +30,8 @@ final class BotJobs
     /** Ishni fon jarayonida ishga tushiradi (Linux va Windows). */
     public static function spawn(int $jobId): void
     {
-        $php = PHP_BINARY;
+        // Veb-serverdan (php-fpm) chaqirilganda PHP_BINARY — fpm'ning o'zi; bizga buyruq qatori php kerak
+        $php = PHP_SAPI === 'cli' ? PHP_BINARY : (is_executable(PHP_BINDIR . '/php') ? PHP_BINDIR . '/php' : 'php');
         $script = ROOT . '/bin/job.php';
         if (PHP_OS_FAMILY === 'Windows') {
             pclose(popen('start /B "" ' . escapeshellarg($php) . ' ' . escapeshellarg($script) . " $jobId", 'r'));

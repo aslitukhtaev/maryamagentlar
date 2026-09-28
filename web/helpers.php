@@ -137,7 +137,7 @@ function fix_form(int $id, int $index, ?array $check, string $return, string $ta
 function design_view(array $design): void
 {
     $id = (int) $design['id'];
-    $return = '?' . (string) ($_SERVER['QUERY_STRING'] ?? '');
+    $return = here_url();
     $carousel = !empty($design['slides']);
     $variants = $design['variants'] ?? [];
     $chosen = isset($design['chosen']) ? (int) $design['chosen'] : null;
@@ -146,7 +146,7 @@ function design_view(array $design): void
     if (($design['engine'] ?? '') === 'failed' || (($design['engine'] ?? '') === 'template' && !empty($design['ai_error']))) {
         echo '<p class="warn">⚠ AI rasm chiza olmadi. ' . e(ai_error_text((string) $design['ai_error'])) . '</p>';
         echo '<form method="post" ' . busy_attr() . '>' . csrf_field() . '<input type="hidden" name="action" value="design_retry"><input type="hidden" name="id" value="' . $id . '">'
-           . '<button type="submit" class="primary-btn">🔁 Qayta urinish</button><span class="busy muted small" hidden>AI chizmoqda — 1-2 daqiqa…</span></form>';
+           . '<button type="submit" class="primary-btn">🔁 Qayta urinish</button><span class="busy muted small" hidden>Boshlanmoqda…</span></form>';
         if (($design['engine'] ?? '') === 'failed') {
             return;
         }
@@ -309,4 +309,28 @@ function ai_error_text(string $raw): string
         (bool) preg_match('/SAFETY|blockReason/i', $raw) => "AI bu mavzudagi rasmni xavfsizlik qoidasi sabab chizmadi — matnni biroz o'zgartirib ko'ring.",
         default => 'Sabab: ' . mb_strimwidth($raw, 0, 160, '…'),
     } . $tried;
+}
+
+/**
+ * Uzoq ishni fonda boshlaydi va darhol qaytadi (sahifa qotmaydi). Bir vaqtda ko'pi bilan 3 ta web ishi.
+ * $return — qaytiladigan sahifa (u yerda holat lentasi ko'rinadi, tugagach natijaga o'tiladi).
+ */
+function start_job(string $type, array $payload, string $return, string $label = ''): never
+{
+    global $store;
+    $running = count(array_filter(Maryam\WebJobs::active($store), static fn ($id) => in_array(Maryam\WebJobs::status($store, $id)['status'], ['queued', 'running'], true)));
+    if ($running >= 3) {
+        throw new RuntimeException("Hozir $running ta ish bajarilmoqda — ulardan biri tugagach qayta bosing.");
+    }
+    $id = Maryam\WebJobs::start($store, $type, $payload, $label);
+    [$path, $hash] = array_pad(explode('#', $return, 2), 2, '');
+    $path = (string) preg_replace('/([?&])(job|jobdone)=\d+&?/', '$1', $path); // eski ish belgilari qolmasin
+    $path = rtrim($path, '&?') ?: '?';
+    redirect($path . (str_contains($path, '?') ? '&' : '?') . 'job=' . $id . ($hash !== '' ? '#' . $hash : ''));
+}
+
+/** Joriy sahifa manzili (fon ishi belgilari job/jobdone'siz) — formalarning "return" qiymati. */
+function here_url(): string
+{
+    return '?' . http_build_query(array_diff_key($_GET, ['job' => 1, 'jobdone' => 1]));
 }

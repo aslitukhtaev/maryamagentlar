@@ -103,6 +103,31 @@ const PAGES = [
 // Diqqat: ?d=, ?img=, ?render=, ?asset= — rasm endpointlari; sahifa parametrlari boshqacha nomlansin
 $page = ($_GET['p'] ?? '') === 'home' ? 'oqitish' : (isset(PAGES[$_GET['p'] ?? '']) ? $_GET['p'] : 'studio');
 
+// Rasm va holat so'rovlari sessiyani ushlab turmasin: aks holda ular bir-birini navbatda kutadi (sahifa "qotadi")
+if (isset($_GET['img']) || isset($_GET['d']) || isset($_GET['render']) || isset($_GET['asset']) || isset($_GET['jobstatus'])) {
+    session_write_close();
+}
+
+// Fon ishi holati (yuqoridagi lenta har 3 soniyada so'raydi)
+if (isset($_GET['jobstatus'])) {
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+    echo json_encode(Maryam\WebJobs::status($store, (int) $_GET['jobstatus']), JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// Fon ishi tugagach natija sahifasiga o'tilganda — ish xabari
+if (isset($_GET['jobdone'])) {
+    $jd = (int) $_GET['jobdone'];
+    $st = Maryam\WebJobs::status($store, $jd);
+    if ($st['status'] === 'failed') {
+        flash('Xato: ' . $st['error'], 'error');
+    } elseif (($m = (string) $store->meta("job:$jd:flash")) !== '') {
+        flash($m, str_contains($m, 'chiza olmadi') || str_contains($m, 'chizilmadi') ? 'error' : 'ok');
+    }
+    $store->setMeta("job:$jd:flash", '');
+}
+
 if (($_GET['img'] ?? '') !== '') {
     // Dizayner yaratgan rasm (faqat output/ papkasidan)
     $design = $store->result((int) $_GET['img'], 'designer', isset($_GET['v']) ? 'variant_' . (int) $_GET['v'] : 'final');

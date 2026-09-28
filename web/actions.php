@@ -23,17 +23,11 @@ $back = static function (string $fallback): string {
 switch ($action) {
     // ---------- Studiya ----------
     case 'run':
-        // "Avtomatik": yo'nalish va maqsad shablondan (yo'q bo'lsa — xorijga turlar, lid)
-        $templateId = (int) ($_POST['template_id'] ?? 0);
-        $tpl = $templateId ? $store->row('templates', $templateId) : null;
-        $input = $_POST;
-        $input['tourism_type'] = ($input['tourism_type'] ?? '') ?: (($tpl['tourism_type'] ?? '') ?: 'outbound');
-        $input['goal'] = ($input['goal'] ?? '') ?: (['qamrov' => 'jalb', 'ishonch' => 'brend', 'sotuv' => 'lid'][$tpl['stage'] ?? ''] ?? 'lid');
-        $brief = Brief::normalize($input, $tones);
-        $brief['id'] = $store->saveBrief($brief);
-        $result = (new Copywriter($ai, $store, $brand, $tones))->run($brief, $templateId ? ['template_id' => $templateId] : []);
-        Output::save($brief, 'copywriter.txt', Copywriter::toText($result));
-        redirect(url(['p' => 'studio', 'brief' => $brief['id']]));
+        // Fon ishi: sahifa darhol qaytadi, holat yuqoridagi lentada
+        if (trim((string) ($_POST['topic'] ?? '')) === '') {
+            throw new InvalidArgumentException('Mavzuni yozing.');
+        }
+        start_job('web_run', array_diff_key($_POST, ['csrf' => 1, 'action' => 1]), url(['p' => 'studio']));
 
     case 'rate':
         $store->rate((int) $_POST['variant_id'], (int) $_POST['rating'], trim((string) ($_POST['feedback'] ?? '')));
@@ -57,50 +51,32 @@ switch ($action) {
         redirect($back('?') . '#v' . (int) $_POST['variant_id']);
 
     case 'design':
-        $briefId = (int) $_POST['brief_id'];
-        $brief = $store->brief($briefId);
-        $result = $store->result($briefId, Copywriter::NAME, 'final') ?? [];
-        $variant = $store->variant((int) $_POST['variant_id']);
-        (new GraphicDesigner($ai, $store, $brand, $tones))->run($brief, $result['strategy'] ?? [], [
-            'template_id' => $result['template_id'] ?? null,
-            'variant' => $variant,
-        ]);
-        flash('Dizayn tayyor — variant ostida.');
-        redirect($back(url(['p' => 'studio', 'brief' => $briefId])) . '#v' . (int) $_POST['variant_id']);
+        start_job('web_design', ['brief_id' => (int) $_POST['brief_id'], 'variant_id' => (int) $_POST['variant_id'], 'return' => (string) ($_POST['return'] ?? '')],
+            $back(url(['p' => 'studio', 'brief' => (int) $_POST['brief_id']])) . '#v' . (int) $_POST['variant_id']);
 
     // ---------- Dizayner (mustaqil) ----------
+
     case 'design_free':
         $text = trim((string) ($_POST['text'] ?? ''));
         if ($text === '') {
             throw new InvalidArgumentException('Matn yoki g\'oyani yozing.');
         }
         $format = in_array($_POST['format'] ?? '', ['post', 'karusel', 'reels'], true) ? $_POST['format'] : 'post';
-        $firstLine = trim((string) strtok($text, "\n"));
-        $type = preg_match('/\\b(umra|haj|makka|madinaga|madinada|ziyorat)/iu', $text) ? 'umra' : 'outbound';
-        $brief = Brief::normalize(['topic' => mb_strimwidth($firstLine, 0, 80, '…'), 'tourism_type' => $type, 'details' => $text], $tones);
-        $brief['id'] = $store->saveBrief($brief);
-        // Jamoa fotolari: yangi yuklanganlar kutubxonaga saqlanadi + kutubxonadan belgilanganlar
+        // Jamoa fotolari: yangi yuklanganlar shu yerda kutubxonaga saqlanadi (vaqtinchalik fayl fon ishigacha yashamaydi)
         $photos = array_values(array_filter(array_map('strval', (array) ($_POST['photo_pick'] ?? []))));
         foreach (uploaded_images('photos') as $tmp) {
             $photos[] = Maryam\BrandAssets::addPhoto($tmp);
         }
-        $design = (new GraphicDesigner($ai, $store, $brand, $tones))->run($brief, [], [
-            'format' => $format, 'text' => $text, 'kind' => 'free', 'photos' => array_slice(array_unique($photos), 0, 3),
-        ]);
-        $ok = !empty($design['card_path']);
-        flash(!$ok ? "Rasm chizilmadi — tafsilotlarni pastda ko'ring." : (!empty($design['slides']) ? 'Karusel tayyor: ' . count($design['slides']) . ' ta slayd, muqovaning ' . count($design['variants']) . ' ta varianti.' : (!empty($design['variants']) ? count($design['variants']) . " ta variant tayyor — eng yoqqanini tanlang." : 'Tayyor!')), $ok ? 'ok' : 'error');
-        redirect(url(['p' => 'brend', 'show' => $design['result_id']]) . '#natija');
+        start_job('web_design_free', ['text' => $text, 'format' => $format, 'photos' => array_slice(array_values(array_unique($photos)), 0, 3)], url(['p' => 'brend']),
+            'Dizayner ' . ['post' => 'post', 'karusel' => 'karusel', 'reels' => 'Stories'][$format] . ' chizmoqda');
 
     // ---------- Haftalik reja ----------
+
     case 'plan':
-        $plan = (new ContentPlanner($ai, $store, $brand, $tones))->run(new DateTimeImmutable('today'), [
-            'wishes' => trim((string) ($_POST['wishes'] ?? '')),
-        ]);
-        Output::save(['topic' => 'haftalik-reja-' . $plan['week'], 'id' => 0], 'kontent-paket.txt', ContentPlanner::toText($plan));
-        flash('Haftalik reja tayyor.');
-        redirect(url(['p' => 'reja', 'week' => $plan['week']]));
+        start_job('web_plan', ['wishes' => trim((string) ($_POST['wishes'] ?? ''))], url(['p' => 'reja']));
 
     // ---------- O'qituvchi ----------
+
     case 'propose_rules':
         $r = (new Trainer($ai, $store))->proposeRules();
         flash(($r['proposed'] ? "O'qituvchi {$r['proposed']} ta yangi qoida taklif qildi — tasdiqlang yoki o'chiring. " : "Yangi qoida taklif qilinmadi. ") . $r['summary']);
@@ -200,25 +176,26 @@ switch ($action) {
         redirect(url(['p' => 'brend']));
 
     case 'design_pick':
-        $picked = (new GraphicDesigner($ai, $store, $brand, $tones))->choose((int) $_POST['id'], (int) $_POST['i']);
-        flash(!empty($picked['slides']) ? 'Muqova almashtirildi — slaydlar shu uslubda qayta chizildi.' : 'Tanlandi — endi "Telegramga yuborish" ni bosing.');
+        $d = $store->resultById((int) $_POST['id']);
+        if (count($d['frames'] ?? []) > 1 && (int) ($d['chosen'] ?? -1) !== (int) $_POST['i']) {
+            // Karusel: boshqa muqova — slaydlar qayta chiziladi (uzoq), fonda
+            start_job('web_design_pick', ['id' => (int) $_POST['id'], 'i' => (int) $_POST['i'], 'return' => (string) ($_POST['return'] ?? '')],
+                $back(url(['p' => 'brend', 'show' => (int) $_POST['id']])));
+        }
+        (new GraphicDesigner($ai, $store, $brand, $tones))->choose((int) $_POST['id'], (int) $_POST['i']);
+        flash('Tanlandi — endi "Telegramga yuborish" ni bosing.');
         redirect($back(url(['p' => 'brend', 'show' => (int) $_POST['id']])) . '#natija');
 
     case 'design_fix':
-        $target = ($_POST['target'] ?? 'v') === 's' ? 's' : 'v';
-        (new GraphicDesigner($ai, $store, $brand, $tones))->fix((int) $_POST['id'], (int) $_POST['i'], trim((string) ($_POST['instruction'] ?? '')), $target);
-        flash($target === 's' ? ((int) $_POST['i'] + 1) . "-slayd tuzatildi." : "Tuzatildi — yangi variant qo'shildi va tanlandi.");
-        redirect($back(url(['p' => 'brend', 'show' => (int) $_POST['id']])) . '#natija');
+        start_job('web_design_fix', ['id' => (int) $_POST['id'], 'i' => (int) $_POST['i'], 'target' => ($_POST['target'] ?? 'v') === 's' ? 's' : 'v',
+            'instruction' => trim((string) ($_POST['instruction'] ?? '')), 'return' => (string) ($_POST['return'] ?? '')],
+            $back(url(['p' => 'brend', 'show' => (int) $_POST['id']])));
 
     case 'design_redraw':
-        $d = (new GraphicDesigner($ai, $store, $brand, $tones))->redrawMissing((int) $_POST['id']);
-        flash(empty($d['missing']) ? 'Barcha slaydlar tayyor.' : count($d['missing']) . ' ta slayd hali chizilmadi — birozdan keyin yana urinib ko\'ring.', empty($d['missing']) ? 'ok' : 'error');
-        redirect($back(url(['p' => 'brend', 'show' => (int) $_POST['id']])) . '#natija');
+        start_job('web_design_redraw', ['id' => (int) $_POST['id'], 'return' => (string) ($_POST['return'] ?? '')], $back(url(['p' => 'brend', 'show' => (int) $_POST['id']])));
 
     case 'design_retry':
-        $again = (new GraphicDesigner($ai, $store, $brand, $tones))->retry((int) $_POST['id']);
-        flash(($again['engine'] ?? '') === 'failed' ? 'AI yana chiza olmadi — sababini pastda ko\'ring.' : 'Tayyor!', ($again['engine'] ?? '') === 'failed' ? 'error' : 'ok');
-        redirect(url(['p' => 'brend', 'show' => $again['result_id']]) . '#natija');
+        start_job('web_design_retry', ['id' => (int) $_POST['id']], $back(url(['p' => 'brend'])));
 
     case 'inspo_upload':
         $added = 0;

@@ -57,7 +57,7 @@ $picked = array_map('strval', (array) ($old['photo_pick'] ?? []));
   <label class="upload-btn">📷 <?= $photos ? 'Yangi foto qo\'shish' : 'Foto tanlash' ?>
     <input type="file" name="photos[]" accept="image/*" multiple hidden onchange="this.parentNode.lastChild.textContent = this.files.length ? ' — ' + this.files.length + ' ta tanlandi' : ''"><span></span></label>
 
-  <div class="actions"><button type="submit" class="primary-btn">🎨 Chizish</button><span class="busy muted" hidden>AI chizmoqda — 1-2 daqiqa. Sahifani yopmang…</span></div>
+  <div class="actions"><button type="submit" class="primary-btn">🎨 Chizish</button><span class="busy muted" hidden>Boshlanmoqda…</span></div>
 </form>
 <script>
 function limitPhotos(el) {

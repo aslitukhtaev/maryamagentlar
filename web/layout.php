@@ -80,6 +80,11 @@ foreach ($sections as $key => $sec) {
   .muted { color:var(--muted); } .small { font-size:13px; }
   .warn { color:var(--warn); font-size:13px; margin:6px 0 0; }
   .flash { border-radius:10px; padding:12px 16px; margin-bottom:16px; background:var(--soft); border:1px solid #bcd3cb; }
+  .jobbar { display:flex; gap:12px; align-items:flex-start; border-radius:10px; padding:12px 16px; margin-bottom:16px; background:#fff8e6; border:1px solid #f0d58c; }
+  .jobbar.done { background:var(--soft); border-color:#bcd3cb; } .jobbar.fail { background:#fbeaea; border-color:#eab9b9; }
+  .jobbar .spin { flex:none; width:18px; height:18px; margin-top:2px; border:3px solid #e8c56a; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite; }
+  .jobbar.done .spin, .jobbar.fail .spin { display:none; }
+  @keyframes spin { to { transform:rotate(360deg); } }
   .flash.error { background:#fbeaea; border-color:#eab9b9; color:var(--err); }
   .badge { display:inline-block; background:var(--soft); color:var(--brand); border-radius:99px; padding:1px 9px; font-size:12px; margin-right:4px; max-width:100%; overflow-wrap:anywhere; }
   .badge.gold { background:#f7eed8; color:#7a5a12; } .badge.off { background:#eee; color:#777; } .badge.new { background:#fff3cd; color:#7a5a12; }
@@ -232,6 +237,13 @@ foreach ($sections as $key => $sec) {
 </aside>
 <main>
   <?php if ($flash): ?><div class="flash <?= e($flash[0]) ?>"><?= e($flash[1]) ?></div><?php endif; ?>
+  <?php $jobs = Maryam\WebJobs::active($store); $watch = (int) ($_GET['job'] ?? 0); ?>
+  <?php foreach ($jobs as $jid): $js = Maryam\WebJobs::status($store, $jid); if (!in_array($js['status'], ['queued', 'running'], true) && $jid !== $watch) { continue; } ?>
+    <div class="jobbar" data-job="<?= $jid ?>" data-watch="<?= $jid === $watch ? 1 : 0 ?>">
+      <span class="spin"></span><div><b><?= e($js['label']) ?></b><br><span class="small jobprog"><?= e($js['progress']) ?></span>
+      <br><span class="small muted">Bu vaqtda ilovaning boshqa bo'limlaridan foydalanishingiz mumkin.</span></div>
+    </div>
+  <?php endforeach; ?>
   <?php if (count($sections[$currentSection][4]) > 1): [$sIc, $sLabel, $sDesc] = $sections[$currentSection]; ?>
     <?php page_header($sIc, $sLabel, $currentSection === 'oqitish'
         ? "Agentlar siz o'rgatgan narsa bilan ishlaydi: shablon, qoida va namunalar. Har bahoyingiz ularni kuchaytiradi."
@@ -246,5 +258,25 @@ foreach ($sections as $key => $sec) {
   <?php require ROOT . "/web/pages/$page.php"; ?>
 </main>
 </div>
+<script>
+// Fon ishlari: holatni so'rab turadi; tugagach natijaga o'tadi (yoki "Ko'rish" havolasi)
+document.querySelectorAll('.jobbar').forEach(bar => {
+  const id = bar.dataset.job, prog = bar.querySelector('.jobprog'), title = bar.querySelector('b');
+  const withDone = u => { let [path, hash] = (u || '?').split('#'); path = path.replace(/([?&])(job|jobdone)=\d+&?/g, '$1').replace(/[?&]$/, '') || '?';
+    return path + (path.includes('?') ? '&' : '?') + 'jobdone=' + id + (hash ? '#' + hash : ''); };
+  const tick = () => fetch('?jobstatus=' + id, { credentials: 'same-origin', cache: 'no-store' }).then(r => r.json()).then(st => {
+    if (st.status === 'queued' || st.status === 'running') { prog.textContent = st.progress || 'Ishlamoqda...'; setTimeout(tick, 3000); return; }
+    if (st.status === 'done' && bar.dataset.watch === '1') { location.href = withDone(st.url); return; }
+    bar.classList.add(st.status === 'done' ? 'done' : 'fail');
+    title.textContent = st.status === 'done' ? '✅ ' + st.label + ' — tayyor' : '⚠ ' + (st.label || 'Ish') + ' — xato';
+    prog.innerHTML = '';
+    if (st.status !== 'done') { prog.textContent = (st.error || '').slice(0, 220) + ' '; }
+    const a = document.createElement('a'); a.href = withDone(st.url); a.textContent = st.status === 'done' ? "Natijani ko'rish →" : 'Ochish';
+    prog.appendChild(a);
+    const note = bar.querySelector('.muted'); if (note) note.remove();
+  }).catch(() => setTimeout(tick, 5000));
+  setTimeout(tick, 1500);
+});
+</script>
 </body>
 </html>
