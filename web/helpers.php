@@ -118,76 +118,83 @@ function check_badge(?array $check): string
         : '<span class="chk bad" title="' . e($check['found'] ?? '') . '">⚠ ' . e($check['issues'] ?: 'Yozuvda xato bo\'lishi mumkin') . '</span>';
 }
 
-/** "Tuzatish" formasi: AI rasmni aytilgancha o'zgartiradi. */
-function fix_form(int $id, int $index, ?array $check, string $return): string
+/** "Tuzatish" formasi: AI rasmni aytilgancha o'zgartiradi ($target: v — variant, s — karusel slaydi). */
+function fix_form(int $id, int $index, ?array $check, string $return, string $target = 'v'): string
 {
-    $open = $check && !$check['ok'] ? ' open' : '';
-    return '<details class="fix"' . $open . '><summary>✏️ Tuzatish</summary><form method="post" ' . busy_attr() . '>' . csrf_field()
+    $bad = $check && !$check['ok'];
+    return '<details class="fix"' . ($bad ? ' open' : '') . '><summary>✏️ Tuzatish</summary><form method="post" ' . busy_attr() . '>' . csrf_field()
         . '<input type="hidden" name="action" value="design_fix"><input type="hidden" name="id" value="' . $id . '">'
-        . '<input type="hidden" name="i" value="' . $index . '"><input type="hidden" name="return" value="' . e($return) . '">'
-        . '<textarea name="instruction" rows="2" placeholder="Masalan: narxni kattaroq qil · fonni kechki qil · ISTANBUL so\'zini to\'g\'rila">'
-        . e($check && !$check['ok'] ? ($check['issues'] ? 'Yozuvni to\'g\'rila: ' . $check['issues'] : '') : '') . '</textarea>'
+        . '<input type="hidden" name="i" value="' . $index . '"><input type="hidden" name="target" value="' . $target . '"><input type="hidden" name="return" value="' . e($return) . '">'
+        . '<textarea name="instruction" rows="2" placeholder="Masalan: narxni kattaroq qil · fonni yorqinroq qil · ISTANBUL so\'zini to\'g\'rila">'
+        . e($bad && $check['issues'] ? 'Yozuvni to\'g\'rila: ' . $check['issues'] : '') . '</textarea>'
         . '<button type="submit" class="ghost">Tuzatish</button><span class="busy muted small" hidden>AI tuzatmoqda (20-60 soniya)…</span></form></details>';
 }
 
-/** Dizayner natijasi: 4 ta AI variant (tanlash/tuzatish), karusel slaydlari yoki zaxira shablon rasmi. */
+/**
+ * Dizayner natijasi — barcha formatlar uchun bir xil ko'rinish:
+ * 4 ta variant (karuselda — muqova variantlari), karusel bo'lsa slaydlar lentasi, yuborish/yuklab olish.
+ */
 function design_view(array $design): void
 {
     $id = (int) $design['id'];
-    $files = design_files($design);
     $return = '?' . (string) ($_SERVER['QUERY_STRING'] ?? '');
     $carousel = !empty($design['slides']);
     $variants = $design['variants'] ?? [];
     $chosen = isset($design['chosen']) ? (int) $design['chosen'] : null;
-    $size = ($design['format'] ?? '') === 'reels' ? '1080×1920' : '1080×1350';
-    if (($design['engine'] ?? '') === 'template' && !empty($design['ai_error'])) {
-        echo '<p class="warn">⚠ AI rasm chiza olmadi, shuning uchun oddiy shablon chizildi. Sabab: ' . e(mb_strimwidth((string) $design['ai_error'], 0, 160, '…'))
-           . '<br>Server administratori Vertex AI\'da rasm modeliga ruxsatni tekshirsin.</p>';
+    $files = design_files($design);
+
+    if (($design['engine'] ?? '') === 'failed' || (($design['engine'] ?? '') === 'template' && !empty($design['ai_error']))) {
+        echo '<p class="warn">⚠ AI rasm chiza olmadi. Sabab: ' . e(mb_strimwidth((string) $design['ai_error'], 0, 200, '…')) . '</p>';
+        echo '<form method="post" ' . busy_attr() . '>' . csrf_field() . '<input type="hidden" name="action" value="design_retry"><input type="hidden" name="id" value="' . $id . '">'
+           . '<button type="submit" class="primary-btn">🔁 Qayta urinish</button><span class="busy muted small" hidden>AI chizmoqda — 1-2 daqiqa…</span></form>';
+        if (($design['engine'] ?? '') === 'failed') {
+            return;
+        }
     }
-    if (!$files) {
-        echo '<p class="warn">Tayyor rasm chizilmadi.</p>';
-    } elseif ($variants && !$carousel) {
-        echo '<p class="small muted">' . count($variants) . " ta variant. Eng yoqqanini <b>Tanlang</b> — keyin Telegramga yuboring. Kichik narsani o'zgartirish uchun <b>Tuzatish</b>.</p>";
+    if ($variants) {
+        echo '<p class="small muted">' . ($carousel
+            ? count($variants) . " ta muqova varianti. Boshqasini tanlasangiz, qolgan slaydlar shu uslubda qayta chiziladi."
+            : count($variants) . " ta variant. Eng yoqqanini <b>Tanlang</b> — keyin Telegramga yuboring. Kichik narsani o'zgartirish uchun <b>Tuzatish</b>.") . '</p>';
         echo '<div class="variants' . (($design['format'] ?? '') === 'reels' ? ' tall' : '') . '">';
         foreach ($variants as $i => $v) {
             $isChosen = $chosen === $i;
-            echo '<div class="vcard' . ($isChosen ? ' chosen' : '') . '">'
-               . '<a href="' . e(url(['d' => $id, 's' => $i])) . '" target="_blank"><img src="' . e(url(['d' => $id, 's' => $i])) . '" alt="' . e($v['concept']) . '" loading="lazy"></a>'
+            $src = e(url(['d' => $id, 'v' => $i]));
+            echo '<div class="vcard' . ($isChosen ? ' chosen' : '') . '"><a href="' . $src . '" target="_blank"><img src="' . $src . '" alt="' . e($v['concept']) . '" loading="lazy"></a>'
                . '<div class="vmeta"><b>' . ($i + 1) . '. ' . e($v['concept']) . '</b>' . check_badge($v['check'] ?? null) . '</div><div class="vact">';
-            echo $isChosen
-                ? '<span class="chk ok">★ Tanlangan</span>'
-                : '<form method="post">' . csrf_field() . '<input type="hidden" name="action" value="design_pick"><input type="hidden" name="id" value="' . $id . '"><input type="hidden" name="i" value="' . $i . '"><input type="hidden" name="return" value="' . e($return) . '"><button class="ghost">✅ Tanlash</button></form>';
-            echo '<a class="ghost-link" href="' . e(url(['d' => $id, 's' => $i, 'dl' => 1])) . '">⬇ Yuklab olish</a></div>'
-               . fix_form($id, $i, $v['check'] ?? null, $return) . '</div>';
-        }
-        echo '</div>';
-    } else {
-        echo '<div class="slides' . ($carousel ? ' carousel' : '') . '">';
-        foreach ($files as $i => $f) {
-            $meta = $design['slide_meta'][$i] ?? null;
-            echo '<div class="slide"><a href="' . e(url(['d' => $id, 's' => $i, 'dl' => 1])) . '" title="Yuklab olish"><img src="' . e(url(['d' => $id, 's' => $i])) . '" alt="' . ($carousel ? ($i + 1) . '-slayd' : 'Tayyor rasm') . '" loading="lazy"></a>';
-            if ($meta) {
-                echo '<div class="vmeta"><b>' . ($i + 1) . '-slayd</b>' . check_badge($meta['check'] ?? null) . '</div>' . fix_form($id, $i, $meta['check'] ?? null, $return);
+            if ($isChosen) {
+                echo '<span class="chk ok">★ ' . ($carousel ? 'Muqova' : 'Tanlangan') . '</span>';
+            } else {
+                echo '<form method="post" ' . ($carousel ? busy_attr() : '') . '>' . csrf_field() . '<input type="hidden" name="action" value="design_pick"><input type="hidden" name="id" value="' . $id . '">'
+                   . '<input type="hidden" name="i" value="' . $i . '"><input type="hidden" name="return" value="' . e($return) . '">'
+                   . '<button type="submit" class="ghost">' . ($carousel ? '✅ Shu muqova bilan' : '✅ Tanlash') . '</button>'
+                   . ($carousel ? '<span class="busy muted small" hidden>Slaydlar qayta chizilmoqda (1-2 daqiqa)…</span>' : '') . '</form>';
             }
-            echo '</div>';
+            echo '<a class="ghost-link" href="' . e(url(['d' => $id, 'v' => $i, 'dl' => 1])) . '">⬇ Yuklab olish</a></div>'
+               . fix_form($id, $i, $v['check'] ?? null, $return, 'v') . '</div>';
         }
         echo '</div>';
     }
+    if ($carousel) {
+        echo '<h3 style="margin-top:16px">Karusel — ' . count($design['slides']) . ' ta slayd</h3><div class="slides carousel">';
+        foreach ($design['slides'] as $i => $f) {
+            $meta = $design['slide_meta'][$i] ?? null;
+            echo '<div class="slide"><a href="' . e(url(['d' => $id, 's' => $i, 'dl' => 1])) . '" title="Yuklab olish"><img src="' . e(url(['d' => $id, 's' => $i])) . '" alt="' . ($i + 1) . '-slayd" loading="lazy"></a>'
+               . '<div class="vmeta"><b>' . ($i + 1) . '-slayd</b>' . check_badge($meta['check'] ?? null) . '</div>'
+               . ($meta && $i > 0 ? fix_form($id, $i, $meta['check'] ?? null, $return, 's') : ($i === 0 ? '<p class="small muted">Muqova — yuqorida tuzatiladi</p>' : '')) . '</div>';
+        }
+        echo '</div>';
+    } elseif (!$variants && $files) { // eski natijalar (shablon)
+        echo '<div class="slides"><div class="slide"><a href="' . e(url(['d' => $id, 's' => 0, 'dl' => 1])) . '"><img src="' . e(url(['d' => $id, 's' => 0])) . '" alt="Tayyor rasm"></a></div></div>';
+    }
     if ($files) {
         $what = $carousel ? count($files) . ' ta slaydni' : ($variants ? ($chosen !== null ? 'tanlanganini' : 'hammasini') : 'rasmni');
-        echo '<div class="actions">';
-        echo '<form method="post" ' . busy_attr() . '>' . csrf_field() . '<input type="hidden" name="action" value="send_tg">'
+        echo '<div class="actions"><form method="post" ' . busy_attr() . '>' . csrf_field() . '<input type="hidden" name="action" value="send_tg">'
            . '<input type="hidden" name="id" value="' . $id . '"><input type="hidden" name="return" value="' . e($return) . '">'
            . '<button type="submit" class="primary-btn">📲 ' . ucfirst($what) . ' Telegramga yuborish</button><span class="busy muted small" hidden>Yuborilmoqda…</span></form>';
         if ($carousel && !empty($design['zip_path'])) {
             echo '<a class="upload-btn" href="' . e(url(['d' => $id, 'zip' => 1])) . '">⬇ ZIP (' . count($files) . ' ta slayd)</a>';
-        } elseif (!$variants) {
-            echo '<a class="upload-btn" href="' . e(url(['d' => $id, 's' => 0, 'dl' => 1])) . "\">⬇ Yuklab olish ($size)</a>";
         }
         echo '</div>';
-        if ($carousel) {
-            echo '<p class="small muted">Telegramga slaydlar tartib bilan albom bo\'lib keladi — Instagram\'ga shu tartibda joylang.</p>';
-        }
     }
     if (!empty($design['layout'])) {
         $models = array_values(array_unique(array_filter(array_column(array_merge($variants, $design['slide_meta'] ?? []), 'model'))));

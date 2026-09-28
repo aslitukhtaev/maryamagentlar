@@ -91,7 +91,7 @@ class GeminiMock
                 ['name' => 'Tipografik', 'prompt' => 'Deep green background, giant gold typography, minimal icons'],
             ];
             $data = str_contains($user, '"deliverable_format": "karusel"')
-                ? ['headline' => 'ISTANBULGA BORISHDAN OLDIN', 'subline' => '4 ta maslahat', 'price' => '', 'badge' => '', 'concepts' => [$concepts[0]],
+                ? ['headline' => 'ISTANBULGA BORISHDAN OLDIN', 'subline' => '4 ta maslahat', 'price' => '', 'badge' => '', 'concepts' => $concepts,
                    'slides' => [
                        ['headline' => 'Istanbulga borishdan oldin 4 narsa', 'subline' => 'Surib ko‘ring', 'prompt' => 'Cover with traveller and Galata tower'],
                        ['headline' => 'Viza kerak emas', 'subline' => '30 kungacha vizasiz', 'prompt' => 'Passport and boarding pass close-up'],

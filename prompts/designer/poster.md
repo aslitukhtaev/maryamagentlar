@@ -36,8 +36,10 @@ Umra/Haj: sokin va hurmatli, ibodat qilayotgan odam yaqindan yo'q. Soxta sharh y
 ## Karusel ("deliverable_format": "karusel")
 "slides" — 4-7 ta slayd: har birida headline, accent, kicker (ixtiyoriy), subline (ixtiyoriy), prompt (shu slayd
 qahramoni va kompozitsiyasi). 1-slayd — hook; o'rtadagilar — bittadan fikr (raqamli bo'lsa "01", "02" kicker'da);
-oxirgisi — harakatga chaqiruv. Copy'da "1-slayd: ..." rejasi bo'lsa — aynan o'sha matnlar. "concepts" 1 ta
-(butun karuselning umumiy vizual g'oyasi).
+oxirgisi — harakatga chaqiruv. Copy'da "1-slayd: ..." rejasi bo'lsa — aynan o'sha matnlar.
+Karuselda ham "concepts" 4 ta: bular muqovaning 4 xil vizual yo'nalishi. Egasi bittasini tanlaydi va qolgan
+slaydlar aynan shu muqova uslubida chiziladi — shuning uchun har konsept butun seriyaga yaraydigan bo'lsin.
+Barcha formatlar (post, stories, reklama, karusel) bir xil sifat va bir xil dizayn tizimida.
 
 ## Javob formati — faqat JSON:
 {

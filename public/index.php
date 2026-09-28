@@ -120,7 +120,11 @@ if (($_GET['img'] ?? '') !== '') {
 // Dizayner natijasi: ?d=<natija id>&s=<rasm tartibi>[&dl=1] yoki &zip=1 (karusel)
 if (isset($_GET['d'])) {
     $design = $store->resultById((int) $_GET['d']);
-    $path = isset($_GET['zip']) ? ($design['zip_path'] ?? null) : (design_files($design ?? [])[(int) ($_GET['s'] ?? 0)] ?? null);
+    $path = match (true) {
+        isset($_GET['zip']) => $design['zip_path'] ?? null,
+        isset($_GET['v']) => $design['variants'][(int) $_GET['v']]['path'] ?? null, // variant (post yoki karusel muqovasi)
+        default => design_files($design ?? [])[(int) ($_GET['s'] ?? 0)] ?? null,
+    };
     $real = $path ? realpath($path) : false;
     if (!$real || !str_starts_with($real, realpath(ROOT . '/output') . DIRECTORY_SEPARATOR)) {
         http_response_code(404);
@@ -130,7 +134,7 @@ if (isset($_GET['d'])) {
     header('Content-Type: ' . (['zip' => 'application/zip', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'][$ext] ?? 'image/png'));
     header('Cache-Control: private, max-age=86400');
     if ($ext === 'zip' || isset($_GET['dl'])) {
-        header('Content-Disposition: attachment; filename="maryam-' . (int) $_GET['d'] . '-' . ((int) ($_GET['s'] ?? 0) + 1) . '.' . $ext . '"');
+        header('Content-Disposition: attachment; filename="maryam-' . (int) $_GET['d'] . '-' . (isset($_GET['v']) ? 'v' . ((int) $_GET['v'] + 1) : ((int) ($_GET['s'] ?? 0) + 1)) . '.' . $ext . '"');
     }
     readfile($real);
     exit;

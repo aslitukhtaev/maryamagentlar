@@ -116,7 +116,7 @@ final class GraphicDesigner
             $context['brand_style'] = $style;
         }
 
-        $say('1/3 Art-direktor: yozuvlar va konseptlar tanlanmoqda...');
+        $say('1/4 Art-direktor: yozuvlar va konseptlar tanlanmoqda...');
         $plan = self::normalizePlan(Prompts::ask($this->ai, $this->store, 'designer/poster', $context, 0.9, true, $briefId, self::NAME, 'poster', [...$refs, ...$grid, ...$photos]));
         if ($plan['headline'] === '') {
             $plan['headline'] = mb_strimwidth((string) (($options['variant']['hook'] ?? '') ?: $brief['topic']), 0, 40, '');
@@ -132,119 +132,164 @@ final class GraphicDesigner
             'image_prompt' => $plan['concepts'][0]['prompt'] ?? '',
             'layout' => array_map(static fn ($c) => $c['name'] . ': ' . $c['prompt'], $plan['concepts']),
             'photos' => array_values((array) ($options['photos'] ?? [])),
+            'options' => array_filter(['format' => $format, 'text' => (string) ($options['text'] ?? ''), 'photos' => array_values((array) ($options['photos'] ?? [])),
+                'template_id' => $options['template_id'] ?? null, 'variant_id' => $variantId ?: null, 'kind' => $kind]),
             'image_path' => null, 'image_generated' => false, 'ai_error' => '',
         ];
+        // Kadrlar: post/stories/reklama — 1 ta, karusel — N ta slayd. Hammasi bir xil jarayondan o'tadi.
+        $result['frames'] = $this->frames($plan, $result, $options, $context, [...$refs, ...$grid, ...$photos], $briefId);
 
         try {
             if (!method_exists($this->ai, 'generateImages')) {
                 throw new RuntimeException('AI rasm chizish ulanmagan');
             }
-            $result = $format === 'karusel'
-                ? $this->aiCarousel($result, $plan, $options, $refs, $photos, $briefId, $say)
-                : $this->aiVariants($result, $plan, $refs, $photos, $briefId, $say);
+            $result = $this->designLead($result, $plan, $refs, $photos, $briefId, $say);
+            if (count($result['frames']) > 1) {
+                $result = $this->designRest($result, $refs, $photos, $briefId, $say);
+            }
         } catch (Throwable $e) {
-            $say("AI rasm chiza olmadi — zaxira shablon ishlatiladi ({$e->getMessage()})");
-            $result = $this->templateFallback($result, $plan, $options, $brief);
             $result['ai_error'] = $e->getMessage();
+            if (Env::get('DESIGN_TEMPLATE_FALLBACK', '0') === '1') {
+                $result = $this->templateFallback($result, $plan, $options, $brief);
+            } else {
+                $result['engine'] = 'failed'; // oddiy shablon chizilmaydi — "Qayta urinish" tugmasi ko'rsatiladi
+                $say("AI rasm chiza olmadi: {$e->getMessage()}");
+            }
         }
 
         $result['result_id'] = $this->store->saveResult($briefId, self::NAME, $kind, $result);
         return $result;
     }
 
-    // ==================== AI CHIZISH ====================
-
-    private function aiVariants(array $result, array $plan, array $refs, array $photos, int $briefId, callable $say): array
+    /** Oldingi buyurtmani xuddi shu sozlamalar bilan qayta ishga tushiradi ("Qayta urinish"). */
+    public function retry(int $resultId, array $options = []): array
     {
+        $d = $this->store->resultById($resultId) ?? throw new RuntimeException('Dizayn topilmadi.');
+        $brief = $this->store->brief((int) $d['brief_id']) ?? throw new RuntimeException('Brif topilmadi.');
+        $o = (array) ($d['options'] ?? []);
+        if (!empty($o['variant_id'])) {
+            $o['variant'] = $this->store->variant((int) $o['variant_id']);
+        }
+        return $this->run($brief, [], $options + $o + ['format' => $d['format'] ?? 'post']);
+    }
+
+    // ==================== YAGONA JARAYON: KADRLAR → 4 VARIANT → TEKSHIRUV → TUZATISH ====================
+
+    /**
+     * Har format kadrlar ro'yxatiga aylanadi: {texts, scene, cta, role}.
+     * Karuselda slaydlar: egasining "1-slayd: ..." matni → art-direktor slaydlari → (bo'lmasa) qayta so'raladi.
+     */
+    private function frames(array $plan, array $result, array $options, array $context, array $images, int $briefId): array
+    {
+        if ($result['format'] !== 'karusel') {
+            return [['texts' => self::texts($plan), 'scene' => '', 'cta' => $this->ctaText($result), 'role' => '']];
+        }
+        $slides = $plan['slides'];
+        $own = PostRenderer::slidesFromText((string) (($options['text'] ?? '') ?: ($options['variant']['visual'] ?? '')));
+        if (count($own) >= 2 && (!empty($options['text']) || count($slides) < 2)) {
+            $slides = array_map(static fn ($s, $i) => [
+                'headline' => (string) $s['title'], 'subline' => self::shortLine((string) ($s['text'] ?? '')),
+                'kicker' => $plan['slides'][$i]['kicker'] ?? '', 'accent' => '', 'prompt' => $plan['slides'][$i]['prompt'] ?? '',
+            ], $own, array_keys($own));
+        }
+        if (count($slides) < 2) {
+            // Art-direktor slaydlarni bermadi — aniq talab bilan qayta so'raymiz (oddiy shablonga tushmaslik uchun)
+            $again = self::normalizePlan(Prompts::ask($this->ai, $this->store, 'designer/poster',
+                $context + ['majburiy' => "Bu KARUSEL: \"slides\" massivida 4-7 ta slayd bo'lishi SHART."], 0.7, true, $briefId, self::NAME, 'poster_slides', $images));
+            $slides = $again['slides'];
+        }
+        if (count($slides) < 2) {
+            $slides = [
+                ['headline' => $plan['headline'], 'subline' => $plan['subline'], 'kicker' => $plan['kicker'], 'accent' => $plan['accent'], 'prompt' => ''],
+                ['headline' => "DIRECT'GA YOZING", 'subline' => $plan['price'] !== '' ? $plan['price'] : '', 'kicker' => '', 'accent' => 'DIRECT', 'prompt' => 'call to action'],
+            ];
+        }
+        $slides = array_slice($slides, 0, 10);
+        $n = count($slides);
+        $frames = [];
+        foreach ($slides as $i => $s) {
+            $frames[] = [
+                'texts' => self::texts($s),
+                'scene' => (string) ($s['prompt'] ?? ''),
+                'cta' => $i === 0 ? 'Surib ko‘ring →' : ($i === $n - 1 ? ($this->phone() ?: "Direct'ga yozing") : ''),
+                'role' => 'Slide ' . ($i + 1) . " of $n of one Instagram carousel — "
+                    . ($i === 0 ? 'the COVER: a strong hook that makes people swipe' : ($i === $n - 1 ? 'the LAST slide: call to action' : 'a content slide: one idea, clear and bold')) . '.',
+            ];
+        }
+        return $frames;
+    }
+
+    /** 1-kadr (post yoki karusel muqovasi) — 4 xil konseptda parallel, tekshiruv va avtomatik tuzatish bilan. */
+    private function designLead(array $result, array $plan, array $refs, array $photos, int $briefId, callable $say): array
+    {
+        $frame = $result['frames'][0];
         $n = max(1, min(4, (int) Env::get('DESIGN_VARIANTS', '4')));
-        $concepts = $plan['concepts'] ?: [['name' => 'Asosiy', 'prompt' => 'Bold travel poster in the style of the reference grid']];
-        $texts = self::texts($plan);
+        $concepts = $plan['concepts'] ?: [['name' => 'Asosiy', 'prompt' => 'Bold hero composition following the design system']];
         $jobs = [];
         for ($i = 0; $i < $n; $i++) {
             $c = $concepts[$i % count($concepts)];
-            $jobs[] = ['prompt' => $this->posterPrompt($texts, $c['prompt'], $result['format'], count($refs), count($photos)),
+            $scene = trim($frame['role'] . ' ' . $c['prompt'] . ($frame['scene'] !== '' ? ' This frame: ' . $frame['scene'] : ''));
+            $jobs[] = ['prompt' => $this->posterPrompt($frame['texts'], $scene, $result['format'], count($refs), count($photos)),
                        'images' => [...$refs, ...$photos], 'aspect' => $result['format'] === 'reels' ? '9:16' : '4:5', 'name' => $c['name']];
         }
-        $say("2/3 AI $n ta variant chizmoqda (odatda 30-90 soniya)...");
+        $what = count($result['frames']) > 1 ? 'muqova' : 'variant';
+        $say("2/4 AI $n ta $what chizmoqda (odatda 30-90 soniya)...");
         $errors = [];
         foreach ($this->ai->generateImages($jobs) as $i => $img) {
             if (is_string($img)) {
                 $errors[] = $img;
                 continue;
             }
-            $result['variants'][] = $this->saveImage($img, $result, $jobs[$i]['name'], $texts, $briefId);
+            $result['variants'][] = $this->saveImage($img, $result, $jobs[$i]['name'], $frame['texts'], $briefId, $frame['cta']);
         }
         if (!$result['variants']) {
-            throw new RuntimeException($errors[0] ?? "rasm qaytmadi");
+            throw new RuntimeException($errors[0] ?? 'rasm qaytmadi');
         }
-        $say('3/3 Rasmlardagi yozuvlar tekshirilmoqda...');
-        $result['variants'] = $this->checkTexts($result['variants'], $briefId);
-        $result['variants'] = $this->autoFix($result['variants'], $result, $briefId, $say);
+        $say('3/4 Yozuvlar tekshirilmoqda...');
+        $result['variants'] = $this->autoFix($this->checkTexts($result['variants'], $briefId), $result, $briefId, $say);
         // Yozuvi to'g'ri chiqqanlar birinchi
         usort($result['variants'], static fn ($a, $b) => (int) (($b['check']['ok'] ?? true) === true) <=> (int) (($a['check']['ok'] ?? true) === true));
         $result['card_path'] = $result['variants'][0]['path'];
-        $result['card_layout'] = 'ai';
+        $result['card_layout'] = count($result['frames']) > 1 ? 'carousel' : 'ai';
+        if (count($result['frames']) > 1) {
+            $result['chosen'] = 0; // karuselda eng yaxshi muqova avtomatik tanlanadi (egasi boshqasini tanlasa — slaydlar qayta chiziladi)
+        }
         $result['image_generated'] = true;
         return $result;
     }
 
-    private function aiCarousel(array $result, array $plan, array $options, array $refs, array $photos, int $briefId, callable $say): array
+    /**
+     * Karuselning qolgan slaydlari — tanlangan muqova uslubida (muqova rasmi namuna sifatida beriladi),
+     * xuddi shu dizayn tizimi, tekshiruv va avtomatik tuzatish bilan.
+     */
+    private function designRest(array $result, array $refs, array $photos, int $briefId, callable $say): array
     {
-        $slides = $plan['slides'];
-        // Egasi o'zi "1-slayd: ..." deb yozgan bo'lsa — aynan uning matni (AI konseptidan foydalanib)
-        $own = PostRenderer::slidesFromText((string) (($options['text'] ?? '') ?: ($options['variant']['visual'] ?? '')));
-        if (count($own) >= 2 && (!empty($options['text']) || count($slides) < 2)) {
-            $slides = array_map(static fn ($s, $i) => [
-                'headline' => (string) $s['title'], 'subline' => (string) ($s['text'] ?? ''),
-                'prompt' => $plan['slides'][$i]['prompt'] ?? '',
-            ], $own, array_keys($own));
-        }
-        if (count($slides) < 2) {
-            throw new RuntimeException('karusel slaydlari aniqlanmadi');
-        }
-        $slides = array_slice($slides, 0, 10);
-        $n = count($slides);
-        $style = $plan['concepts'][0]['prompt'] ?? '';
-        $job = function (int $i, array $extraImages) use ($slides, $n, $style, $refs, $photos, $result) {
-            $s = $slides[$i];
-            $role = $i === 0 ? 'COVER slide: a strong hook that makes people swipe'
-                : ($i === $n - 1 ? 'LAST slide: call to action' : 'content slide: one idea, clean and readable');
-            $lock = $extraImages ? ' The LAST attached image is slide 1 of this same carousel: copy its exact visual system — fonts, colours, text treatment, graphic elements — so all slides look like one series.' : '';
-            return ['prompt' => $this->posterPrompt(self::texts($s),
-                        trim("Slide " . ($i + 1) . " of $n of one Instagram carousel. $role. Overall style: $style. This slide: {$s['prompt']}") . $lock,
-                        'karusel', count($refs), $i === 0 ? count($photos) : 0),
-                    'images' => [...$refs, ...($i === 0 ? $photos : []), ...$extraImages], 'aspect' => '4:5'];
-        };
-
-        $say("2/3 AI karusel muqovasini chizmoqda (1/$n)...");
-        $cover = $this->ai->generateImages([$job(0, [])])[0];
-        if (is_string($cover)) {
-            throw new RuntimeException($cover);
-        }
-        $items = [0 => $this->saveImage($cover, $result, '1-slayd', self::texts($slides[0]), $briefId, 'Surib ko‘ring →')];
-        $coverRef = ['mime' => $cover['mime_type'], 'data' => $cover['base64']];
-        $say("2/3 Qolgan " . ($n - 1) . " ta slayd shu uslubda chizilmoqda...");
+        $cover = $result['variants'][(int) ($result['chosen'] ?? 0)];
+        $anchor = ['mime' => str_ends_with($cover['raw'], '.png') ? 'image/png' : 'image/jpeg', 'data' => base64_encode((string) file_get_contents($cover['raw']))];
+        $frames = $result['frames'];
         $jobs = [];
-        for ($i = 1; $i < $n; $i++) {
-            $jobs[$i] = $job($i, [$coverRef]);
+        foreach (array_slice($frames, 1, null, true) as $i => $f) {
+            $scene = trim($f['role'] . ($f['scene'] !== '' ? ' This slide: ' . $f['scene'] : '')
+                . ' The LAST attached image is the cover of this same carousel: keep its exact visual system — typography, colours, hero treatment, graphic accents, lighting — so every slide looks like one series, while the composition fits this slide.');
+            $jobs[$i] = ['prompt' => $this->posterPrompt($f['texts'], $scene, 'karusel', count($refs), count($photos)),
+                         'images' => [...$refs, ...$photos, $anchor], 'aspect' => '4:5'];
         }
+        $say('4/4 Qolgan ' . count($jobs) . ' ta slayd muqova uslubida chizilmoqda...');
+        $items = [0 => $cover];
         foreach ($this->ai->generateImages($jobs) as $i => $img) {
             if (is_string($img)) {
                 throw new RuntimeException(($i + 1) . "-slayd chizilmadi: $img");
             }
-            $items[$i] = $this->saveImage($img, $result, ($i + 1) . '-slayd', self::texts($slides[$i]), $briefId,
-                $i === $n - 1 ? ($this->phone() ?: "Direct'ga yozing") : '');
+            $items[$i] = $this->saveImage($img, $result, ($i + 1) . '-slayd', $frames[$i]['texts'], $briefId, $frames[$i]['cta']);
         }
         ksort($items);
-        $say('3/3 Slaydlardagi yozuvlar tekshirilmoqda...');
-        $items = $this->checkTexts(array_values($items), $briefId);
-        $items = $this->autoFix($items, $result, $briefId, $say);
-        $result['slide_meta'] = $items;
-        $result['slides'] = array_column($items, 'path');
+        $rest = $this->autoFix($this->checkTexts(array_slice($items, 1, null, true), $briefId), $result, $briefId, $say);
+        $items = [0 => $cover] + $rest;
+        ksort($items);
+        $result['slide_meta'] = array_values($items);
+        $result['slides'] = array_column($result['slide_meta'], 'path');
         $result['card_path'] = $result['slides'][0];
-        $result['card_layout'] = 'carousel';
         $result['zip_path'] = self::zip($result['slides'], Output::dir(['id' => $briefId, 'topic' => $this->topic($briefId)]) . '/karusel-' . bin2hex(random_bytes(3)) . '.zip');
-        $result['image_generated'] = true;
         return $result;
     }
 
@@ -341,7 +386,7 @@ final class GraphicDesigner
         if (!$bad || Env::get('DESIGN_AUTOFIX', '1') === '0') {
             return $items;
         }
-        $say('3/3 ' . count($bad) . " ta rasmda yozuv xatosi — AI o'zi tuzatmoqda...");
+        $say('3/4 ' . count($bad) . " ta rasmda yozuv xatosi — AI o'zi tuzatmoqda...");
         $jobs = [];
         foreach ($bad as $i => $it) {
             $jobs[$i] = $this->editJob($it, (string) (($it['check']['fix'] ?? '') ?: 'Fix the spelling of all text on the image'), $result['format']);
@@ -377,27 +422,34 @@ final class GraphicDesigner
 
     // ==================== TANLASH VA TUZATISH ====================
 
-    public function choose(int $resultId, int $index): array
+    /** Variantni tanlash. Karuselda boshqa muqova tanlansa — qolgan slaydlar shu muqova uslubida qayta chiziladi. */
+    public function choose(int $resultId, int $index, ?callable $say = null): array
     {
         $d = $this->store->resultById($resultId) ?? throw new RuntimeException('Dizayn topilmadi.');
         if (!isset($d['variants'][$index])) {
             throw new RuntimeException('Variant topilmadi.');
         }
+        $changed = (int) ($d['chosen'] ?? -1) !== $index;
         $d['chosen'] = $index;
         $d['card_path'] = $d['variants'][$index]['path'];
+        if ($changed && count($d['frames'] ?? []) > 1) {
+            $d = $this->designRest($d, BrandAssets::insposForAi(2), BrandAssets::photosForAi((array) ($d['photos'] ?? [])),
+                (int) $d['brief_id'], $say ?? static fn (string $m) => null);
+        }
         $this->store->updateResult($resultId, $d);
         return $d;
     }
 
     /**
      * Rasm modeli tanlangan rasmni tahrirlaydi ("narxni kattaroq qil", "ISTANBUL so'zini to'g'rila").
-     * Post: yangi variant qo'shiladi va tanlanadi. Karusel: slayd almashtiriladi.
+     * $target: 'v' — variant (post yoki karusel muqovasi), 's' — karusel slaydi.
+     * Variant: yangi variant qo'shiladi va tanlanadi (karuselda muqova ham almashadi). Slayd: o'rnida almashadi.
      */
-    public function fix(int $resultId, int $index, string $instruction): array
+    public function fix(int $resultId, int $index, string $instruction, string $target = 'v'): array
     {
         $d = $this->store->resultById($resultId) ?? throw new RuntimeException('Dizayn topilmadi.');
-        $carousel = !empty($d['slide_meta']);
-        $item = $carousel ? ($d['slide_meta'][$index] ?? null) : ($d['variants'][$index] ?? null);
+        $slide = $target === 's' && !empty($d['slide_meta']);
+        $item = $slide ? ($d['slide_meta'][$index] ?? null) : ($d['variants'][$index] ?? null);
         if (!$item || !is_file((string) ($item['raw'] ?? ''))) {
             throw new RuntimeException('Bu rasmni tuzatib bo\'lmaydi (asl nusxasi yo\'q).');
         }
@@ -409,19 +461,26 @@ final class GraphicDesigner
         if (is_string($img)) {
             throw new RuntimeException('AI tuzata olmadi: ' . $img);
         }
-        $new = $this->saveImage($img, $d, 'Tuzatilgan: ' . mb_strimwidth($instruction, 0, 40, '…'), $item['texts'] ?? [], (int) $d['brief_id'], $item['cta'] ?? null);
-        $new = $this->checkTexts([$new], (int) $d['brief_id'])[0];
-        if ($carousel) {
+        $name = $slide ? $item['concept'] : 'Tuzatilgan: ' . mb_strimwidth($instruction, 0, 40, '…');
+        $new = $this->checkTexts([$this->saveImage($img, $d, $name, $item['texts'] ?? [], (int) $d['brief_id'], $item['cta'] ?? null)], (int) $d['brief_id'])[0];
+        if ($slide) {
             $d['slide_meta'][$index] = $new;
             $d['slides'][$index] = $new['path'];
-            $d['card_path'] = $d['slides'][0];
-            if (!empty($d['zip_path'])) {
-                $d['zip_path'] = self::zip($d['slides'], preg_replace('/\.zip$/', '', $d['zip_path']) . '-2.zip') ?? $d['zip_path'];
-            }
         } else {
+            $wasCover = !empty($d['slide_meta']) && (int) ($d['chosen'] ?? 0) === $index;
             $d['variants'][] = $new;
             $d['chosen'] = count($d['variants']) - 1;
             $d['card_path'] = $new['path'];
+            if ($wasCover) { // tuzatilgan muqova — uslub o'sha, qolgan slaydlar qayta chizilmaydi
+                $d['slide_meta'][0] = $new;
+                $d['slides'][0] = $new['path'];
+            } elseif (!empty($d['slide_meta'])) {
+                $d = $this->designRest($d, BrandAssets::insposForAi(2), BrandAssets::photosForAi((array) ($d['photos'] ?? [])), (int) $d['brief_id'], static fn (string $m) => null);
+            }
+        }
+        if (!empty($d['slides'])) {
+            $d['card_path'] = $d['slides'][0];
+            $d['zip_path'] = self::zip($d['slides'], Output::dir(['id' => $d['brief_id'], 'topic' => $this->topic((int) $d['brief_id'])]) . '/karusel-' . bin2hex(random_bytes(3)) . '.zip') ?? ($d['zip_path'] ?? null);
         }
         $this->store->updateResult($resultId, $d);
         return $d;

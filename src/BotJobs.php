@@ -140,7 +140,7 @@ final class BotJobs
             'variant' => $variant,
         ]);
         $this->assertActive();
-        if (!empty($design['variants']) && count($design['variants']) >= 2) {
+        if (empty($design['slides']) && !empty($design['variants']) && count($design['variants']) >= 2) {
             // AI variantlar: albom (ko'rish uchun) + qaysi biri tanlanishini so'raymiz
             $n = count($design['variants']);
             $tg->sendMediaGroup(array_column($design['variants'], 'path'), "🎨 $n ta variant: " . ($brief['topic'] ?? ''), 'photo');
@@ -154,6 +154,9 @@ final class BotJobs
                 . "\n\nTuzatish kerak bo'lsa — ilovadagi Dizayner bo'limida \"✏️ Tuzatish\".", BotUi::inline(array_chunk($buttons, 2)));
         } elseif (!empty($design['slides']) && count($design['slides']) >= 2) {
             $tg->sendMediaGroup($design['slides'], '🎨 Karusel: ' . count($design['slides']) . " ta slayd (1080×1350). Instagram'ga shu tartibda joylang.");
+            if (count($design['variants'] ?? []) > 1) {
+                $tg->message("Muqovaning yana " . (count($design['variants']) - 1) . " ta varianti bor — boshqasini tanlasangiz, slaydlar shu uslubda qayta chiziladi (ilovadagi Dizayner bo'limida).");
+            }
         } elseif (!empty($design['card_path'])) {
             // Brend uslubidagi tayyor rasm — to'g'ridan-to'g'ri Instagram'ga
             $tg->sendDocument($design['card_path'], "🎨 Tayyor rasm (1080×1350, sifat yo'qolmasligi uchun fayl sifatida)");
