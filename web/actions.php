@@ -210,6 +210,11 @@ switch ($action) {
         flash($target === 's' ? ((int) $_POST['i'] + 1) . "-slayd tuzatildi." : "Tuzatildi — yangi variant qo'shildi va tanlandi.");
         redirect($back(url(['p' => 'brend', 'show' => (int) $_POST['id']])) . '#natija');
 
+    case 'design_redraw':
+        $d = (new GraphicDesigner($ai, $store, $brand, $tones))->redrawMissing((int) $_POST['id']);
+        flash(empty($d['missing']) ? 'Barcha slaydlar tayyor.' : count($d['missing']) . ' ta slayd hali chizilmadi — birozdan keyin yana urinib ko\'ring.', empty($d['missing']) ? 'ok' : 'error');
+        redirect($back(url(['p' => 'brend', 'show' => (int) $_POST['id']])) . '#natija');
+
     case 'design_retry':
         $again = (new GraphicDesigner($ai, $store, $brand, $tones))->retry((int) $_POST['id']);
         flash(($again['engine'] ?? '') === 'failed' ? 'AI yana chiza olmadi — sababini pastda ko\'ring.' : 'Tayyor!', ($again['engine'] ?? '') === 'failed' ? 'error' : 'ok');
@@ -263,7 +268,7 @@ switch ($action) {
         if (!empty($design['variants']) && empty($design['slides']) && isset($design['chosen'])) {
             $files = [$design['variants'][(int) $design['chosen']]['path'] ?? ''];
         }
-        $files = array_values(array_filter($files, 'is_string'));
+        $files = array_values(array_filter($files, static fn ($f) => is_string($f) && is_file($f)));
         $files = array_values(array_filter($files, 'is_file'));
         $token = (string) Maryam\Env::get('TELEGRAM_BOT_TOKEN', '');
         $auth = (string) ($_SESSION['auth'] ?? '');

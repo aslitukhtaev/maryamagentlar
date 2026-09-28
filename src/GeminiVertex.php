@@ -112,21 +112,48 @@ class GeminiVertex
         $results = [];
         $lastError = [];
         $pending = array_keys($jobs);
+        // Rasm modellarining daqiqalik limiti kichik: bir vaqtda ko'pi bilan N ta so'rov, limitga tegsa (429) kutib qayta
+        $parallel = max(1, (int) Env::get('VERTEX_IMAGE_PARALLEL', '2'));
+        $base = (float) Env::get('VERTEX_RETRY_BASE', '8');
+        $budget = 90.0; // jami kutish chegarasi (soniya) — sahifa cheksiz osilib qolmasin
+        $trail = [];
         foreach (self::imageModels($this->location) as [$model, $location]) {
             if (!$pending) {
                 break;
             }
             $next = [];
-            foreach ($this->multiImage($model, $location, array_intersect_key($jobs, array_flip($pending))) as $i => $r) {
-                if (is_array($r)) {
-                    $results[$i] = $r;
-                } elseif (preg_match('/\((400|404|429|500|503)\)|faqat matn|qaytarmadi/u', $r)) {
-                    [$lastError[$i], $next[]] = [$r, $i]; // boshqa model bilan urinib ko'ramiz
-                } else {
-                    $results[$i] = $r;
+            $queue = $pending;
+            $tries = [];
+            while ($queue) {
+                $batch = array_splice($queue, 0, $parallel);
+                $limited = [];
+                foreach ($this->multiImage($model, $location, array_intersect_key($jobs, array_flip($batch))) as $i => $r) {
+                    if (is_string($r)) {
+                        preg_match('/\((\d{3})\)/', $r, $code);
+                        $trail[$i][$model] = $code[1] ?? 'xato'; // qaysi model nima qaytargani (xato xabarida ko'rsatiladi)
+                    }
+                    if (is_array($r)) {
+                        $results[$i] = $r;
+                    } elseif (str_contains($r, '(429)') && $budget > 0 && ($tries[$i] = ($tries[$i] ?? 0) + 1) <= 4) {
+                        [$lastError[$i], $limited[]] = [$r, $i];
+                    } elseif (preg_match('/\((400|404|429|500|503)\)|faqat matn|qaytarmadi/u', $r)) {
+                        [$lastError[$i], $next[]] = [$r, $i]; // boshqa model bilan urinib ko'ramiz
+                        if (str_contains($r, '(404)')) { // model yo'q — qolgan navbatni ham darhol keyingi modelga
+                            array_push($next, ...$queue);
+                            $queue = [];
+                        }
+                    } else {
+                        $results[$i] = $r;
+                    }
+                }
+                if ($limited) {
+                    $wait = min($budget, 60, $base * 2 ** (max(array_intersect_key($tries, array_flip($limited))) - 1));
+                    $budget -= max($wait, 0.001);
+                    usleep((int) ($wait * 1e6));
+                    array_unshift($queue, ...$limited);
                 }
             }
-            $pending = $next;
+            $pending = array_values(array_unique($next));
         }
         // Model o'lcham sozlamasini (aspectRatio) qabul qilmagan bo'lsa — sozlamasiz bir marta (kod baribir kesadi)
         $retry = array_filter($pending, static fn ($i) => str_contains($lastError[$i] ?? '', '(400)') && isset($jobs[$i]['aspect']));
@@ -145,7 +172,8 @@ class GeminiVertex
             $pending = array_values(array_diff($pending, array_keys($results)));
         }
         foreach ($pending as $i) {
-            $results[$i] = $lastError[$i] ?? 'Rasm chizadigan model topilmadi.';
+            $tried = implode(', ', array_map(static fn ($m, $c) => "$m: $c", array_keys($trail[$i] ?? []), $trail[$i] ?? []));
+            $results[$i] = ($lastError[$i] ?? 'Rasm chizadigan model topilmadi.') . ($tried !== '' ? " | Urinilgan modellar: $tried" : '');
         }
         ksort($results);
         return $results;

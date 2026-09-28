@@ -156,6 +156,7 @@ foreach ($sections as $key => $sec) {
   .fix { margin-top:6px; font-size:13px; } .fix summary { cursor:pointer; color:var(--brand); font-weight:600; }
   .fix textarea { min-height:56px; margin:6px 0; font-size:14px; }
   .slides .slide { flex:none; width:220px; }
+  .slide-missing { aspect-ratio:4/5; border:2px dashed #e0b98a; border-radius:8px; display:flex; align-items:center; justify-content:center; text-align:center; color:#8a4b00; background:#fff8ee; font-size:13px; padding:10px; }
   .slides:not(.carousel) .slide { width:300px; max-width:100%; }
   .photo-pick { display:grid; grid-template-columns:repeat(auto-fill, minmax(74px, 1fr)); gap:6px; margin-bottom:8px; }
   .photo-pick label { position:relative; margin:0; cursor:pointer; aspect-ratio:1; border-radius:8px; overflow:hidden; }

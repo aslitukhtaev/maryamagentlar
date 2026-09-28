@@ -144,7 +144,7 @@ function design_view(array $design): void
     $files = design_files($design);
 
     if (($design['engine'] ?? '') === 'failed' || (($design['engine'] ?? '') === 'template' && !empty($design['ai_error']))) {
-        echo '<p class="warn">⚠ AI rasm chiza olmadi. Sabab: ' . e(mb_strimwidth((string) $design['ai_error'], 0, 200, '…')) . '</p>';
+        echo '<p class="warn">⚠ AI rasm chiza olmadi. ' . e(ai_error_text((string) $design['ai_error'])) . '</p>';
         echo '<form method="post" ' . busy_attr() . '>' . csrf_field() . '<input type="hidden" name="action" value="design_retry"><input type="hidden" name="id" value="' . $id . '">'
            . '<button type="submit" class="primary-btn">🔁 Qayta urinish</button><span class="busy muted small" hidden>AI chizmoqda — 1-2 daqiqa…</span></form>';
         if (($design['engine'] ?? '') === 'failed') {
@@ -178,15 +178,26 @@ function design_view(array $design): void
         echo '<h3 style="margin-top:16px">Karusel — ' . count($design['slides']) . ' ta slayd</h3><div class="slides carousel">';
         foreach ($design['slides'] as $i => $f) {
             $meta = $design['slide_meta'][$i] ?? null;
+            if (!empty($meta['failed'])) {
+                echo '<div class="slide"><div class="slide-missing">⚠ ' . ($i + 1) . '-slayd chizilmadi</div></div>';
+                continue;
+            }
             echo '<div class="slide"><a href="' . e(url(['d' => $id, 's' => $i, 'dl' => 1])) . '" title="Yuklab olish"><img src="' . e(url(['d' => $id, 's' => $i])) . '" alt="' . ($i + 1) . '-slayd" loading="lazy"></a>'
                . '<div class="vmeta"><b>' . ($i + 1) . '-slayd</b>' . check_badge($meta['check'] ?? null) . '</div>'
                . ($meta && $i > 0 ? fix_form($id, $i, $meta['check'] ?? null, $return, 's') : ($i === 0 ? '<p class="small muted">Muqova — yuqorida tuzatiladi</p>' : '')) . '</div>';
         }
         echo '</div>';
+        if (!empty($design['missing'])) {
+            echo '<p class="warn">' . count($design['missing']) . ' ta slayd chizilmadi' . (!empty($design['rest_error']) ? ' (' . e(mb_strimwidth(ai_error_text((string) $design['rest_error']), 0, 140, '…')) . ')' : '') . '. Tayyorlari saqlandi.</p>'
+               . '<form method="post" ' . busy_attr() . '>' . csrf_field() . '<input type="hidden" name="action" value="design_redraw"><input type="hidden" name="id" value="' . $id . '">'
+               . '<input type="hidden" name="return" value="' . e($return) . '"><button type="submit" class="primary-btn">🔁 Chizilmagan slaydlarni qayta chizish</button>'
+               . '<span class="busy muted small" hidden>Chizilmoqda…</span></form>';
+        }
     } elseif (!$variants && $files) { // eski natijalar (shablon)
         echo '<div class="slides"><div class="slide"><a href="' . e(url(['d' => $id, 's' => 0, 'dl' => 1])) . '"><img src="' . e(url(['d' => $id, 's' => 0])) . '" alt="Tayyor rasm"></a></div></div>';
     }
     if ($files) {
+        $files = array_values(array_filter($files, static fn ($f) => is_string($f) && is_file($f)));
         $what = $carousel ? count($files) . ' ta slaydni' : ($variants ? ($chosen !== null ? 'tanlanganini' : 'hammasini') : 'rasmni');
         echo '<div class="actions"><form method="post" ' . busy_attr() . '>' . csrf_field() . '<input type="hidden" name="action" value="send_tg">'
            . '<input type="hidden" name="id" value="' . $id . '"><input type="hidden" name="return" value="' . e($return) . '">'
@@ -285,4 +296,17 @@ function uploaded_images(string $field): array
         }
     }
     return $out;
+}
+
+/** Texnik AI xatosini egasiga tushunarli qilib yozadi. */
+function ai_error_text(string $raw): string
+{
+    $tried = preg_match('/Urinilgan modellar: (.+)$/u', $raw, $m) ? ' (Urinilgan modellar: ' . $m[1] . ')' : '';
+    return match (true) {
+        str_contains($raw, '(429)') => "Google'ning rasm chizish limiti vaqtincha tugadi (bir daqiqada juda ko'p so'rov). 1-2 daqiqadan keyin qayta urining.",
+        (bool) preg_match('/\((401|403)\)/', $raw) => "Google Cloud'da rasm modeliga ruxsat yo'q — administrator Vertex AI ruxsatini tekshirsin.",
+        str_contains($raw, '(404)') => "Rasm modeli bu Google Cloud loyihasida topilmadi.",
+        (bool) preg_match('/SAFETY|blockReason/i', $raw) => "AI bu mavzudagi rasmni xavfsizlik qoidasi sabab chizmadi — matnni biroz o'zgartirib ko'ring.",
+        default => 'Sabab: ' . mb_strimwidth($raw, 0, 160, '…'),
+    } . $tried;
 }

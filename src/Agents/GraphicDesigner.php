@@ -262,35 +262,60 @@ final class GraphicDesigner
      * Karuselning qolgan slaydlari — tanlangan muqova uslubida (muqova rasmi namuna sifatida beriladi),
      * xuddi shu dizayn tizimi, tekshiruv va avtomatik tuzatish bilan.
      */
-    private function designRest(array $result, array $refs, array $photos, int $briefId, callable $say): array
+    private function designRest(array $result, array $refs, array $photos, int $briefId, callable $say, ?array $only = null): array
     {
         $cover = $result['variants'][(int) ($result['chosen'] ?? 0)];
         $anchor = ['mime' => str_ends_with($cover['raw'], '.png') ? 'image/png' : 'image/jpeg', 'data' => base64_encode((string) file_get_contents($cover['raw']))];
         $frames = $result['frames'];
+        $items = $only === null ? [0 => $cover] : array_replace($result['slide_meta'] ?? [], [0 => $cover]);
         $jobs = [];
         foreach (array_slice($frames, 1, null, true) as $i => $f) {
+            if ($only !== null && !in_array($i, $only, true)) {
+                continue;
+            }
             $scene = trim($f['role'] . ($f['scene'] !== '' ? ' This slide: ' . $f['scene'] : '')
                 . ' The LAST attached image is the cover of this same carousel: keep its exact visual system — typography, colours, hero treatment, graphic accents, lighting — so every slide looks like one series, while the composition fits this slide.');
             $jobs[$i] = ['prompt' => $this->posterPrompt($f['texts'], $scene, 'karusel', count($refs), count($photos)),
                          'images' => [...$refs, ...$photos, $anchor], 'aspect' => '4:5'];
         }
-        $say('4/4 Qolgan ' . count($jobs) . ' ta slayd muqova uslubida chizilmoqda...');
-        $items = [0 => $cover];
-        foreach ($this->ai->generateImages($jobs) as $i => $img) {
+        $say('4/4 ' . count($jobs) . ' ta slayd muqova uslubida chizilmoqda...');
+        $drawn = [];
+        $errors = [];
+        foreach ($jobs ? $this->ai->generateImages($jobs) : [] as $i => $img) {
             if (is_string($img)) {
-                throw new RuntimeException(($i + 1) . "-slayd chizilmadi: $img");
+                // Bitta slayd chizilmasa ham tayyorlari saqlanadi — keyin faqat shu slayd qayta chiziladi
+                $errors[] = $img;
+                $items[$i] = ['failed' => true, 'error' => $img, 'path' => '', 'raw' => '', 'concept' => ($i + 1) . '-slayd',
+                              'texts' => $frames[$i]['texts'], 'cta' => $frames[$i]['cta'], 'check' => null];
+                continue;
             }
-            $items[$i] = $this->saveImage($img, $result, ($i + 1) . '-slayd', $frames[$i]['texts'], $briefId, $frames[$i]['cta']);
+            $drawn[$i] = $this->saveImage($img, $result, ($i + 1) . '-slayd', $frames[$i]['texts'], $briefId, $frames[$i]['cta']);
         }
-        ksort($items);
-        $rest = $this->autoFix($this->checkTexts(array_slice($items, 1, null, true), $briefId), $result, $briefId, $say);
-        $items = [0 => $cover] + $rest;
+        if ($drawn) {
+            $drawn = $this->autoFix($this->checkTexts($drawn, $briefId), $result, $briefId, $say);
+        }
+        $items = array_replace($items, $drawn);
         ksort($items);
         $result['slide_meta'] = array_values($items);
-        $result['slides'] = array_column($result['slide_meta'], 'path');
+        $result['slides'] = array_map(static fn ($m) => (string) ($m['path'] ?? ''), $result['slide_meta']);
         $result['card_path'] = $result['slides'][0];
-        $result['zip_path'] = self::zip($result['slides'], Output::dir(['id' => $briefId, 'topic' => $this->topic($briefId)]) . '/karusel-' . bin2hex(random_bytes(3)) . '.zip');
+        $result['missing'] = array_keys(array_filter($result['slide_meta'], static fn ($m) => !empty($m['failed'])));
+        $result['rest_error'] = $errors[0] ?? '';
+        $result['zip_path'] = self::zip(array_filter($result['slides'], 'is_file'), Output::dir(['id' => $briefId, 'topic' => $this->topic($briefId)]) . '/karusel-' . bin2hex(random_bytes(3)) . '.zip');
         return $result;
+    }
+
+    /** Karuselda chizilmay qolgan slaydlarni (masalan limit sabab) qayta chizadi. */
+    public function redrawMissing(int $resultId): array
+    {
+        $d = $this->store->resultById($resultId) ?? throw new RuntimeException('Dizayn topilmadi.');
+        if (empty($d['missing'])) {
+            return $d;
+        }
+        $d = $this->designRest($d, BrandAssets::insposForAi(2), BrandAssets::photosForAi((array) ($d['photos'] ?? [])),
+            (int) $d['brief_id'], static fn (string $m) => null, array_map('intval', $d['missing']));
+        $this->store->updateResult($resultId, $d);
+        return $d;
     }
 
     /**
@@ -624,6 +649,9 @@ final class GraphicDesigner
             return null;
         }
         foreach ($files as $i => $f) {
+            if (!is_string($f) || !is_file($f)) {
+                continue; // chizilmay qolgan slayd
+            }
             $zip->addFile($f, sprintf('slayd-%02d.', $i + 1) . pathinfo($f, PATHINFO_EXTENSION));
         }
         $zip->close();

@@ -153,7 +153,9 @@ final class BotJobs
             $tg->message("Qaysi biri yoqdi? Tanlanganini sifatli fayl qilib yuboraman.\n\n" . implode("\n", $notes)
                 . "\n\nTuzatish kerak bo'lsa — ilovadagi Dizayner bo'limida \"✏️ Tuzatish\".", BotUi::inline(array_chunk($buttons, 2)));
         } elseif (!empty($design['slides']) && count($design['slides']) >= 2) {
-            $tg->sendMediaGroup($design['slides'], '🎨 Karusel: ' . count($design['slides']) . " ta slayd (1080×1350). Instagram'ga shu tartibda joylang.");
+            $ready = array_values(array_filter($design['slides'], static fn ($f) => is_string($f) && is_file($f)));
+            $tg->sendMediaGroup($ready, '🎨 Karusel: ' . count($ready) . " ta slayd (1080×1350). Instagram'ga shu tartibda joylang."
+                . (!empty($design['missing']) ? "\n⚠ " . count($design['missing']) . " ta slayd limit sabab chizilmadi — ilovadagi Dizayner bo'limida \"qayta chizish\" ni bosing." : ''));
             if (count($design['variants'] ?? []) > 1) {
                 $tg->message("Muqovaning yana " . (count($design['variants']) - 1) . " ta varianti bor — boshqasini tanlasangiz, slaydlar shu uslubda qayta chiziladi (ilovadagi Dizayner bo'limida).");
             }

@@ -32,6 +32,10 @@ class GeminiMock
         $out = [];
         foreach ($jobs as $i => $job) {
             self::$imageJobs[] = ['prompt' => $job['prompt'], 'images' => count($job['images'] ?? []), 'aspect' => $job['aspect'] ?? '4:5'];
+            if (($fail = getenv('AI_MOCK_FAIL_SLIDE')) && str_contains($job['prompt'], "Slide $fail of")) {
+                $out[$i] = 'Vertex AI xatosi (429) [mock]: Resource exhausted';
+                continue;
+            }
             if (getenv('AI_MOCK_IMAGES') === '0') {
                 $out[$i] = 'Vertex AI xatosi (404) [mock]: model not found';
                 continue;
