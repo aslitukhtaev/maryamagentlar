@@ -79,6 +79,10 @@ class GeminiMock
             $data = $this->mockTemplate();
         } elseif (str_contains($system, "O'QITUVCHISI")) {
             $data = $this->mockRules();
+        } elseif (str_contains($system, 'kreativ agentlikning bosh art-direktorisan')) {
+            $data = ['summary_uz' => "Ikki rang (qora + sariq), juda katta tor sarlavha, qirqilgan qahramon harflar oldida.",
+                     'art_direction_en' => "- COLOUR: {DARK} base, {ACCENT} accents\n- TYPOGRAPHY: huge condensed caps\n- HERO: cut-out subject overlapping headline",
+                     'palette' => ['dark' => '#111111', 'accent' => '#f5c518']];
         } elseif (str_contains($system, 'afisha dizaynerisan')) {
             $concepts = [
                 ['name' => 'Sayohatchi va Galata', 'prompt' => 'Happy traveller in the foreground, Galata tower at golden hour behind, huge white condensed headline'],
@@ -94,7 +98,7 @@ class GeminiMock
                        ['headline' => 'Istanbulkart oling', 'subline' => 'Metro, tramvay, parom', 'prompt' => 'Tram on Istiklal street'],
                        ['headline' => "Direct'ga ISTANBUL deb yozing", 'subline' => '10 daqiqada javob', 'prompt' => 'Smiling manager with phone'],
                    ], 'alt_text' => 'Istanbul haqida karusel']
-                : ['headline' => 'ISTANBUL 775$ DAN', 'subline' => 'Har kuni uchish · 5 kun', 'price' => '775$ dan', 'badge' => 'QAYNOQ TUR',
+                : ['kicker' => '5 kunlik tur', 'headline' => 'ISTANBUL 775$ DAN', 'accent' => 'ISTANBUL', 'subline' => 'Har kuni uchish · 5 kun', 'price' => '775$ dan', 'badge' => 'QAYNOQ TUR',
                    'concepts' => $concepts, 'slides' => [], 'alt_text' => "Istanbul, Galata minorasi oqshom yorug'ida"];
         } elseif (str_contains($system, 'matn tekshiruvchisisan')) {
             // Sinov: ikkinchi rasmda xato bor deb ko'rsatamiz (UI dagi ogohlantirishni tekshirish uchun)

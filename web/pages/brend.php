@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use Maryam\Agents\GraphicDesigner;
 use Maryam\BrandAssets;
+use Maryam\DesignSystem;
 use Maryam\PostRenderer;
 
 $colors = PostRenderer::colors($store);
@@ -10,16 +11,19 @@ $style = GraphicDesigner::style($store);
 $dir = BrandAssets::dir();
 $refs = BrandAssets::refs();
 $photos = BrandAssets::photos();
+$inspos = BrandAssets::inspos();
+$system = DesignSystem::get($store);
+$pal = DesignSystem::palette($store);
 $autoColors = (string) $store->meta('brand_colors_auto') !== '';
 $current = isset($_GET['show']) ? $store->resultById((int) $_GET['show']) : null;
 $designs = $store->recentDesigns(18);
-$logos = ['logo-white' => ['Oq logo', 'Har rasmning tepasida turadi'], 'logo' => ['Rangli logo', 'Och fonlar uchun']];
+$logos = ['logo-white' => ['Oq logo (tavsiya)', 'Shaffof fonli oq logo — dizayn ustida plashkasiz turadi'], 'logo' => ['Rangli logo', 'Och fonlar uchun']];
 $v = static fn () => substr(md5(@filemtime("$dir/logo.png") . '|' . @filemtime("$dir/logo-white.png")), 0, 8);
 $formats = ['post' => ['Post', '4 ta variant, 1080×1350'], 'karusel' => ['Karusel', '4-7 slayd, bir uslubda'], 'reels' => ['Stories / Reels', '4 ta variant, 1080×1920']];
 $fmt = (string) ($old['format'] ?? $_GET['format'] ?? 'post');
 $picked = array_map('strval', (array) ($old['photo_pick'] ?? []));
 ?>
-<?php page_header('🎨', 'Dizayner', "AI gridingiz uslubida tayyor post chizadi — yozuvlari bilan. Har safar 4 xil variant: eng yoqqanini tanlaysiz yoki bir so'z bilan tuzattirasiz."); ?>
+<?php page_header('🎨', 'Dizayner', "AI professional dizayn tizimida tayyor post chizadi — yozuvlari bilan. Har safar 4 xil variant: eng yoqqanini tanlaysiz yoki bir so'z bilan tuzattirasiz."); ?>
 
 <?php if (!function_exists('imagecreatetruecolor')): ?>
   <div class="flash error">Serverda rasm moduli hali o'rnatilmagan — server bir necha daqiqada o'zi o'rnatadi (avtomatik yangilanish). Keyin sahifani yangilang.</div>
@@ -81,6 +85,42 @@ function limitPhotos(el) {
   </div>
 </div>
 <?php endif; ?>
+
+<h2 id="uslub">Dizayn uslubi</h2>
+<div class="card">
+  <p class="small">Barcha postlar bitta professional seriyaga o'xshashi uchun <b>dizayn tizimi</b>: ranglar, shrift, joylashuv, elementlar.
+    Yoqqan dizayn namunasini (boshqa kompaniya lentasi, Pinterest, Behance) yuklang — AI shu darajada va shu uslubda chizadi.</p>
+  <p class="small"><b><?= $system['source'] === 'inspo' ? 'Namunadan olingan uslub:' : 'Hozir:' ?></b> <?= e($system['summary']) ?></p>
+  <p class="small"><span class="swatch big" style="background:<?= e($pal['dark']) ?>"></span>Fon &nbsp;
+    <span class="swatch big" style="background:<?= e($pal['accent']) ?>"></span>Urg'u</p>
+  <form method="post" enctype="multipart/form-data" <?= busy_attr() ?>><?= csrf_field() ?>
+    <input type="hidden" name="action" value="inspo_upload">
+    <label class="upload-btn big">✨ Uslub namunasini yuklash
+      <input type="file" name="inspo[]" accept="image/*" multiple hidden onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()"></label>
+    <button type="submit" hidden></button><span class="busy muted small" hidden>Yuklanmoqda va uslub tahlil qilinmoqda…</span>
+  </form>
+  <?php if ($inspos): ?>
+    <div class="ref-grid">
+      <?php foreach ($inspos as $i => $name): ?>
+        <div class="ref">
+          <a href="<?= e(url(['asset' => 'inspo', 'n' => $name])) ?>" target="_blank"><img src="<?= e(url(['asset' => 'inspo', 'n' => $name, 'sm' => 1])) ?>" alt="Uslub namunasi" loading="lazy"></a>
+          <?php if ($i < 2): ?><span class="ref-tag">AI ko'radi</span><?php endif; ?>
+          <form method="post" onsubmit="return confirm('Namuna o\'chirilsinmi?')"><?= csrf_field() ?>
+            <input type="hidden" name="action" value="inspo_delete"><input type="hidden" name="name" value="<?= e($name) ?>">
+            <button class="ref-del" title="O'chirish">×</button></form>
+        </div>
+      <?php endforeach; ?>
+    </div>
+    <form method="post" class="actions" style="margin-top:12px"><?= csrf_field() ?><input type="hidden" name="action" value="design_palette">
+      <label class="choice" style="flex:1"><input type="radio" name="mode" value="brand" <?= $system['palette_mode'] === 'brand' ? 'checked' : '' ?> onchange="this.form.submit()">
+        <span><b>Brend ranglari</b><small>to'q yashil + yorqin oltin (logongizga mos)</small></span></label>
+      <label class="choice" style="flex:1"><input type="radio" name="mode" value="inspo" <?= $system['palette_mode'] === 'inspo' ? 'checked' : '' ?> onchange="this.form.submit()">
+        <span><b>Namunadagi ranglar</b><small>namunadagidek aynan</small></span></label>
+    </form>
+    <form method="post" <?= busy_attr() ?>><?= csrf_field() ?><input type="hidden" name="action" value="system_refresh">
+      <button type="submit" class="ghost">Uslubni qayta tahlil qilish</button><span class="busy muted small" hidden>Tahlil qilinmoqda…</span></form>
+  <?php endif; ?>
+</div>
 
 <h2 id="fotolar">Jamoa fotolari</h2>
 <div class="card">
@@ -166,9 +206,9 @@ function limitPhotos(el) {
 
 <details class="card more-card small"><summary><b>Dizayner qanday ishlaydi</b></summary>
   <ol>
-    <li><b>Art-direktor</b> (AI) g'oyangiz, grid namunalari va fotolarni ko'rib, rasmga yoziladigan qisqa matnni va 4 xil konseptni tanlaydi: odamli, manzara, kollaj, tipografik.</li>
-    <li><b>Rasm modeli</b> 4 ta variantni bir vaqtda chizadi — yozuvlari bilan, gridingiz uslubida.</li>
-    <li>Haqiqiy <b>logo</b> tepaga, <b>telefon</b> (narxli postda) yoki Instagram manzili pastga tizim tomonidan qo'yiladi.</li>
+    <li><b>Art-direktor</b> (AI) g'oyangizni, dizayn tizimini va fotolarni ko'rib, qisqa yozuvlar va 4 xil g'oya tanlaydi (qahramon obyekt yoki odam, sarlavha joylashuvi).</li>
+    <li><b>Rasm modeli</b> 4 ta variantni bir vaqtda chizadi — uslub namunasi darajasida, yozuvlari bilan.</li>
+    <li>Haqiqiy <b>logo</b> tepada markazga, pastga bir xil <b>tugma</b> (narxli postda telefon, boshqasida "Batafsil izohda") tizim tomonidan qo'yiladi.</li>
     <li><b>Tekshiruvchi</b> har rasmdagi yozuvni o'qiydi: xato bo'lsa "⚠" belgisi va tayyor tuzatish taklifi chiqadi.</li>
     <li>Siz <b>tanlaysiz</b> yoki <b>tuzattirasiz</b> ("narxni kattaroq qil", "fonni kechki qil") va Telegramga yuborasiz.</li>
   </ol>

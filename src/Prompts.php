@@ -18,6 +18,7 @@ final class Prompts
         'planner/plan' => 'Kontent-strateg: haftalik reja',
         'designer/poster' => "Dizayner: nima chiziladi (yozuvlar va 4 xil konsept)",
         'designer/check' => "Dizayner: rasmdagi yozuvlarni tekshirish",
+        'designer/system' => "Dizayner: uslub namunalaridan dizayn tizimi",
         'designer/style' => 'Dizayner: grid namunalaridan uslub profili',
         'manager/orchestrate' => "Manager: Telegram suhbat va topshiriq berish",
         'trainer/rules' => "O'qituvchi: baholardan qoida chiqarish",

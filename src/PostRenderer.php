@@ -234,16 +234,18 @@ final class PostRenderer
         $cw = (int) ($this->w / $scale);
         $ch = (int) ($this->h / $scale);
         imagecopyresampled($this->img, $src, 0, 0, (int) (($sw - $cw) / 2), (int) (($sh - $ch) / 2), $this->w, $this->h, $cw, $ch);
-        // Logo — chap yuqori burchakdagi toza "belgi" (plashka) ichida: har qanday fonda o'qiladi va rasm matni bilan urishmaydi
-        $this->logoBadge(self::M - 28, 36);
-        // Telefon — faqat sotuv postida, o'ng pastki burchakda plashkada
+        // Logo — tepada markazda (seriyaning doimiy joyi); tugma — pastda markazda, urg'u rangida
+        $this->logoBadge(null, 34);
         $line = $this->clean($bottomText);
         if ($line !== '') {
-            $f = $this->fit($line, 'Bold', 28, 20, 520, 1);
+            $f = $this->fit($line, 'Bold', 30, 22, 620, 1);
             $lw = $this->width($f['lines'][0], 'Bold', $f['size']);
-            $x2 = $this->w - self::M + 28;
-            $this->roundRect($x2 - $lw - 44, $this->h - 100, $x2, $this->h - 42, 29, $this->alpha('dark', 105));
-            $this->text($f['lines'][0], 'Bold', $f['size'], $x2 - $lw - 22, $this->h - 71 + (int) ($f['size'] * 0.5), $this->c['light']);
+            $bw = $lw + 72;
+            $x1 = (int) (($this->w - $bw) / 2);
+            [$y1, $y2] = [$this->h - 112, $this->h - 48];
+            $this->roundRect($x1 + 3, $y1 + 5, $x1 + $bw + 3, $y2 + 5, 32, $this->alpha('dark', 70)); // yumshoq soya
+            $this->roundRect($x1, $y1, $x1 + $bw, $y2, 32, $this->c['accent']);
+            $this->text($f['lines'][0], 'Bold', $f['size'], $x1 + 36, $y1 + 32 + (int) ($f['size'] * 0.5), $this->c['dark']);
         }
         ob_start();
         imagejpeg($this->img, null, 92);
@@ -499,7 +501,7 @@ final class PostRenderer
     }
 
     /** Logo plashkada: oq logo — to'q shaffof plashkada, rangli logo — oq plashkada; logo yo'q — so'z-belgi. */
-    private function logoBadge(int $x, int $y): void
+    private function logoBadge(?int $x, int $y): void
     {
         $white = $this->logoWhitePath && is_file($this->logoWhitePath);
         $path = $white ? $this->logoWhitePath : ($this->logoPath && is_file($this->logoPath) ? $this->logoPath : null);
@@ -508,13 +510,17 @@ final class PostRenderer
         if ($logo) {
             $scale = min($maxH / imagesy($logo), $maxW / imagesx($logo));
             [$lw, $lh] = [(int) (imagesx($logo) * $scale), (int) (imagesy($logo) * $scale)];
-            $this->roundRect($x, $y, $x + $lw + 2 * $padX, $y + $lh + 2 * $padY, 18, $white ? $this->alpha('dark', 100) : imagecolorallocatealpha($this->img, 255, 255, 255, 8));
+            $x ??= (int) (($this->w - $lw - 2 * $padX) / 2);
+            if (!$white) { // rangli logo to'q fonda ko'rinmaydi — oq plashkada; oq logo esa to'g'ridan-to'g'ri dizayn ustida
+                $this->roundRect($x, $y, $x + $lw + 2 * $padX, $y + $lh + 2 * $padY, 18, imagecolorallocatealpha($this->img, 255, 255, 255, 8));
+            }
             imagealphablending($this->img, true);
             imagecopyresampled($this->img, $logo, $x + $padX, $y + $padY, 0, 0, $lw, $lh, imagesx($logo), imagesy($logo));
             return;
         }
         $name = mb_strtoupper(explode(' ', (string) ($this->brand['name'] ?? 'MARYAM'))[0]);
         $nw = $this->width($name, 'Display', 30);
+        $x ??= (int) (($this->w - $nw - 2 * $padX) / 2);
         $this->roundRect($x, $y, $x + $nw + 2 * $padX, $y + 64, 18, $this->alpha('dark', 100));
         $this->text($name, 'Display', 30, $x + $padX, $y + 44, $this->c['accent']);
     }

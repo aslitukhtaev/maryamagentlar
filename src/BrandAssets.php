@@ -131,6 +131,63 @@ final class BrandAssets
         return $out;
     }
 
+    // ==================== USLUB NAMUNALARI (ilhom: qanday dizayn kerakligi) ====================
+
+    public const MAX_INSPO = 6;
+
+    /** Egasi yoqtirgan professional dizayn namunasi — AI shu darajadagi kompozitsiya va tipografiyani takrorlaydi. */
+    public static function addInspo(string $tmpPath): string
+    {
+        if (count(self::inspos()) >= self::MAX_INSPO) {
+            throw new InvalidArgumentException('Ko\'pi bilan ' . self::MAX_INSPO . " ta uslub namunasi. Eskisini o'chirib, keyin yuklang.");
+        }
+        $im = self::load($tmpPath);
+        @mkdir(self::dir() . '/inspo', 0775, true);
+        $name = date('Ymd-His') . '-' . bin2hex(random_bytes(3));
+        imagejpeg(self::fit($im, 1800), self::dir() . "/inspo/$name.jpg", 90);
+        imagejpeg(self::fit($im, 1280), self::dir() . "/inspo/$name.ai.jpg", 88); // zich kollajlarda mayda detal ko'rinsin
+        return $name;
+    }
+
+    /** @return string[] */
+    public static function inspos(): array
+    {
+        $files = glob(self::dir() . '/inspo/*.jpg') ?: [];
+        $names = array_map(static fn ($f) => basename($f, '.jpg'), array_filter($files, static fn ($f) => !str_ends_with($f, '.ai.jpg')));
+        rsort($names);
+        return array_values($names);
+    }
+
+    public static function inspoPath(string $name, bool $small = false): ?string
+    {
+        if (!preg_match('/^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$/', $name)) {
+            return null;
+        }
+        $path = self::dir() . "/inspo/$name" . ($small ? '.ai' : '') . '.jpg';
+        return is_file($path) ? $path : null;
+    }
+
+    public static function deleteInspo(string $name): void
+    {
+        foreach ([false, true] as $small) {
+            if ($p = self::inspoPath($name, $small)) {
+                unlink($p);
+            }
+        }
+    }
+
+    /** @return array<int, array{mime: string, data: string}> */
+    public static function insposForAi(int $limit = 2): array
+    {
+        $out = [];
+        foreach (array_slice(self::inspos(), 0, $limit) as $name) {
+            if ($p = self::inspoPath($name, true)) {
+                $out[] = ['mime' => 'image/jpeg', 'data' => base64_encode((string) file_get_contents($p))];
+            }
+        }
+        return $out;
+    }
+
     /** Dizayner agentga beriladigan namunalar (kichik nusxalar, base64). */
     public static function refsForAi(int $limit = 4): array
     {

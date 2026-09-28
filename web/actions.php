@@ -209,6 +209,32 @@ switch ($action) {
         flash(!empty($fixed['slide_meta']) ? ((int) $_POST['i'] + 1) . "-slayd tuzatildi." : "Tuzatildi — yangi variant qo'shildi va tanlandi.");
         redirect($back(url(['p' => 'brend', 'show' => (int) $_POST['id']])) . '#natija');
 
+    case 'inspo_upload':
+        $added = 0;
+        foreach (uploaded_images('inspo') as $tmp) {
+            Maryam\BrandAssets::addInspo($tmp);
+            $added++;
+        }
+        $err = $added ? Maryam\DesignSystem::analyze($ai, $store) : null;
+        flash(!$added ? 'Rasm tanlanmadi yoki juda katta (10 MB gacha).' : ($err ?? "Uslub namunasi qo'shildi — AI dizayn tizimini chiqardi, keyingi postlar shu uslubda."), !$added || $err ? 'error' : 'ok');
+        redirect(url(['p' => 'brend']) . '#uslub');
+
+    case 'inspo_delete':
+        Maryam\BrandAssets::deleteInspo((string) ($_POST['name'] ?? ''));
+        Maryam\DesignSystem::analyze($ai, $store);
+        flash("Namuna o'chirildi.");
+        redirect(url(['p' => 'brend']) . '#uslub');
+
+    case 'design_palette':
+        $store->setMeta('design_palette', ($_POST['mode'] ?? '') === 'inspo' ? 'inspo' : 'brand');
+        flash('Ranglar saqlandi.');
+        redirect(url(['p' => 'brend']) . '#uslub');
+
+    case 'system_refresh':
+        $err = Maryam\DesignSystem::analyze($ai, $store);
+        flash($err ?? 'Dizayn tizimi qayta tahlil qilindi.', $err ? 'error' : 'ok');
+        redirect(url(['p' => 'brend']) . '#uslub');
+
     case 'photo_upload':
         $added = 0;
         foreach (uploaded_images('photos') as $tmp) {

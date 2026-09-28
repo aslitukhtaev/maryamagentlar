@@ -142,6 +142,7 @@ if (isset($_GET['render']) || isset($_GET['asset'])) {
         $file = match ($_GET['asset']) {
             'ref' => Maryam\BrandAssets::refPath((string) ($_GET['n'] ?? ''), isset($_GET['sm'])),
             'photo' => Maryam\BrandAssets::photoPath((string) ($_GET['n'] ?? ''), isset($_GET['sm'])),
+            'inspo' => Maryam\BrandAssets::inspoPath((string) ($_GET['n'] ?? ''), isset($_GET['sm'])),
             default => ROOT . Maryam\PostRenderer::BRAND_DIR . '/' . ($_GET['asset'] === 'logo-white' ? 'logo-white.png' : 'logo.png'),
         };
         if (!$file || !is_file($file)) {

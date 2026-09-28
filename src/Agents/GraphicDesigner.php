@@ -6,6 +6,7 @@ namespace Maryam\Agents;
 
 use Maryam\BrandAssets;
 use Maryam\Brief;
+use Maryam\DesignSystem;
 use Maryam\Env;
 use Maryam\Marketing;
 use Maryam\Output;
@@ -101,16 +102,22 @@ final class GraphicDesigner
         if (!empty($options['text'])) {
             $context['copy'] = ['text' => (string) $options['text']];
         }
-        $refs = BrandAssets::refsForAi(3);
+        // Rasm modeliga: uslub namunalari (qanday dizayn kerak) + jamoa fotolari. O'z gridi faqat art-direktorga
+        // (mazmunni tushunish uchun) — sifati past bo'lsa, uslubni buzmasin.
+        $refs = BrandAssets::insposForAi(2);
+        $grid = BrandAssets::refsForAi(2);
         $photos = BrandAssets::photosForAi((array) ($options['photos'] ?? []));
-        $context['reference_images'] = count($refs);
+        $system = DesignSystem::get($this->store);
+        $context['design_system'] = ['qisqacha' => $system['summary'], 'tizim' => DesignSystem::artDirection($this->store)];
+        $context['style_samples'] = count($refs);
+        $context['company_grid_images'] = count($grid);
         $context['user_photos'] = count($photos);
         if ($style = self::style($this->store)) {
             $context['brand_style'] = $style;
         }
 
         $say('1/3 Art-direktor: yozuvlar va konseptlar tanlanmoqda...');
-        $plan = self::normalizePlan(Prompts::ask($this->ai, $this->store, 'designer/poster', $context, 0.9, true, $briefId, self::NAME, 'poster', [...$refs, ...$photos]));
+        $plan = self::normalizePlan(Prompts::ask($this->ai, $this->store, 'designer/poster', $context, 0.9, true, $briefId, self::NAME, 'poster', [...$refs, ...$grid, ...$photos]));
         if ($plan['headline'] === '') {
             $plan['headline'] = mb_strimwidth((string) (($options['variant']['hook'] ?? '') ?: $brief['topic']), 0, 40, '');
         }
@@ -119,7 +126,7 @@ final class GraphicDesigner
         $kind = (string) ($options['kind'] ?? ($variantId ? "variant_$variantId" : 'final'));
         $result = [
             'brief_id' => $briefId, 'format' => $format, 'engine' => 'ai',
-            'headline' => $plan['headline'], 'subline' => $plan['subline'], 'price' => $plan['price'],
+            'headline' => $plan['headline'], 'subline' => $plan['subline'], 'price' => $plan['price'], 'design_system' => $system['source'],
             'variants' => [], 'chosen' => null, 'slides' => [], 'slide_meta' => [], 'zip_path' => null,
             'card_path' => null, 'card_layout' => '', 'alt_text' => $plan['alt_text'],
             'image_prompt' => $plan['concepts'][0]['prompt'] ?? '',
@@ -203,7 +210,7 @@ final class GraphicDesigner
             $role = $i === 0 ? 'COVER slide: a strong hook that makes people swipe'
                 : ($i === $n - 1 ? 'LAST slide: call to action' : 'content slide: one idea, clean and readable');
             $lock = $extraImages ? ' The LAST attached image is slide 1 of this same carousel: copy its exact visual system — fonts, colours, text treatment, graphic elements — so all slides look like one series.' : '';
-            return ['prompt' => $this->posterPrompt(['Headline' => $s['headline'], 'Sub-line' => $s['subline']],
+            return ['prompt' => $this->posterPrompt(self::texts($s),
                         trim("Slide " . ($i + 1) . " of $n of one Instagram carousel. $role. Overall style: $style. This slide: {$s['prompt']}") . $lock,
                         'karusel', count($refs), $i === 0 ? count($photos) : 0),
                     'images' => [...$refs, ...($i === 0 ? $photos : []), ...$extraImages], 'aspect' => '4:5'];
@@ -214,7 +221,7 @@ final class GraphicDesigner
         if (is_string($cover)) {
             throw new RuntimeException($cover);
         }
-        $items = [0 => $this->saveImage($cover, $result, '1-slayd', self::texts($slides[0]), $briefId)];
+        $items = [0 => $this->saveImage($cover, $result, '1-slayd', self::texts($slides[0]), $briefId, 'Surib ko‘ring →')];
         $coverRef = ['mime' => $cover['mime_type'], 'data' => $cover['base64']];
         $say("2/3 Qolgan " . ($n - 1) . " ta slayd shu uslubda chizilmoqda...");
         $jobs = [];
@@ -225,7 +232,8 @@ final class GraphicDesigner
             if (is_string($img)) {
                 throw new RuntimeException(($i + 1) . "-slayd chizilmadi: $img");
             }
-            $items[$i] = $this->saveImage($img, $result, ($i + 1) . '-slayd', self::texts($slides[$i]), $briefId);
+            $items[$i] = $this->saveImage($img, $result, ($i + 1) . '-slayd', self::texts($slides[$i]), $briefId,
+                $i === $n - 1 ? ($this->phone() ?: "Direct'ga yozing") : '');
         }
         ksort($items);
         $say('3/3 Slaydlardagi yozuvlar tekshirilmoqda...');
@@ -246,35 +254,34 @@ final class GraphicDesigner
      */
     private function posterPrompt(array $texts, string $concept, string $format, int $nRefs, int $nPhotos): string
     {
-        $colors = PostRenderer::colors($this->store);
-        $style = self::style($this->store);
+        $pal = DesignSystem::palette($this->store);
         $canvas = $format === 'reels' ? 'vertical 9:16 Instagram Stories/Reels cover' : 'vertical 4:5 Instagram feed post';
-        $p = "Create a finished, scroll-stopping $canvas for \"Maryam Travel\", a travel agency in Uzbekistan. It must look like the work of a top Instagram travel designer — bright, real, emotional.\n";
-        $p .= "PHOTOGRAPHY FIRST: the main visual is a vivid, bright, sunny, natural REAL photograph (destination, hotel, beach, city, happy travellers) filling the whole canvas. "
-            . "NOT a 3D render, NOT CGI, NOT stock icons: no 3D gold coins, credit cards, calculators, podiums, abstract objects or dark empty studio backgrounds. Avoid dark, gloomy, low-contrast looks.\n";
+        $p = "Design a finished $canvas for \"Maryam Travel\", a travel agency in Uzbekistan, at the level of a top creative agency's portfolio — bold, precise, strongly arranged, premium.\n";
         if ($nRefs) {
-            $p .= "STYLE REFERENCE: the first $nRefs attached image(s) are screenshots of the agency's own Instagram grid. Match that visual language — real people and places, huge bold condensed uppercase headlines in white or yellow with a thick outline or strong shadow placed directly on the photo, small sticker-like badges and flags, energetic but clean. Do NOT copy any text, faces or logos from these screenshots.\n";
+            $p .= "STYLE REFERENCE: the first $nRefs attached image(s) show the exact design level and system we want. Replicate their art direction — typography scale and hierarchy, layering of the cut-out subject with the headline, graphic accents, lighting, composition and finish — but with our own topic, texts and colours. Do NOT copy their words, logos or people.\n";
         }
         if ($nPhotos) {
-            $p .= "PEOPLE: the next $nPhotos attached photo(s) show real people from our team/clients. Use these exact people as the hero — keep face, identity, skin tone and body realistic and unchanged; cut them out and place them naturally in the scene with matching light.\n";
+            $p .= "PEOPLE: the next $nPhotos attached photo(s) show real people from our team/clients. Use these exact people as the hero cut-out — keep face, identity and skin tone unchanged, realistic, with matching light.\n";
         }
-        $p .= "Brand colours deep green {$colors['primary']} and gold {$colors['accent']} ONLY as small accents (price badge, underline, sticker) — never as a big flat background.";
-        if (!empty($style['mood'])) {
-            $p .= " Mood: {$style['mood']}.";
+        $p .= "DESIGN SYSTEM (follow strictly — every post of this brand must look like part of one series):\n" . DesignSystem::artDirection($this->store) . "\n";
+        $p .= "Palette: dark {$pal['dark']}, accent {$pal['accent']}, white. No other colours in graphics or type.\n";
+        $p .= "THIS POST: $concept\n";
+        $p .= "TEXT — render exactly these texts, spelled letter-for-letter in Uzbek Latin script (keep the apostrophe in O‘ and G‘), and no other words:\n";
+        foreach ($texts as $label => $t) {
+            if ($label !== 'Accent word') {
+                $p .= "- $label: \"" . trim((string) $t) . "\"\n";
+            }
         }
-        $p .= "\nART DIRECTION: $concept\n";
-        $lines = array_filter($texts, static fn ($t) => trim((string) $t) !== '');
-        $p .= "TEXT ON THE IMAGE — render exactly these texts, spelled letter-for-letter in Uzbek Latin script (keep apostrophes as in O‘ and G‘), and no other words at all:\n";
-        foreach ($lines as $label => $t) {
-            $p .= "- $label: \"" . trim((string) $t) . "\"\n";
+        if (!empty($texts['Accent word'])) {
+            $p .= "The key word to set enormous in the accent colour: \"{$texts['Accent word']}\".\n";
         }
-        $p .= "RULES: text very large, sharp, high-contrast, fully inside the frame. Do NOT write the brand name, any logo, Instagram handle, phone number, website, \"swipe\" or arrows, or any extra words. "
-            . "Keep the top-left corner (about 25% of the width × 10% of the height) and the bottom-right corner (about 45% × 8%) free of text and faces — a logo badge and contacts are placed there later.";
+        $p .= "RULES: text perfectly sharp and correctly spelled; nothing cut off by the frame. Do NOT write the brand name, a logo, Instagram handle, phone number, website, buttons or \"swipe\". "
+            . "Leave the top-centre area (about 30% of the width × 9% of the height) and a bottom-centre strip (about 50% × 9%) empty of text and faces — our logo and a call-to-action button are placed there afterwards, matching the style.";
         return $p;
     }
 
     /** @return array{path: string, raw: string, concept: string, texts: array, model: string, check: ?array} */
-    private function saveImage(array $img, array $result, string $name, array $texts, int $briefId): array
+    private function saveImage(array $img, array $result, string $name, array $texts, int $briefId, ?string $cta = null): array
     {
         $dir = Output::dir(['id' => $briefId, 'topic' => $this->topic($briefId)]);
         $id = bin2hex(random_bytes(4));
@@ -283,8 +290,10 @@ final class GraphicDesigner
         file_put_contents($raw, $bytes);
         $path = "$dir/ai-$id.jpg";
         $renderer = PostRenderer::forBrand($this->brand, self::style($this->store));
-        file_put_contents($path, $renderer->finishPoster($bytes, $result['format'], $this->bottomText($result), PostRenderer::colors($this->store)));
-        return ['path' => $path, 'raw' => $raw, 'concept' => $name, 'texts' => $texts, 'model' => (string) ($img['model_used'] ?? ''), 'check' => null];
+        $cta ??= $this->ctaText($result);
+        $pal = DesignSystem::palette($this->store);
+        file_put_contents($path, $renderer->finishPoster($bytes, $result['format'], $cta, ['primary' => $pal['dark'], 'dark' => $pal['dark'], 'accent' => $pal['accent']]));
+        return ['path' => $path, 'raw' => $raw, 'concept' => $name, 'texts' => $texts, 'cta' => $cta, 'model' => (string) ($img['model_used'] ?? ''), 'check' => null];
     }
 
     /** Ko'ra oladigan model har rasmdagi yozuvni o'qiydi va kutilgan matn bilan solishtiradi. */
@@ -340,7 +349,7 @@ final class GraphicDesigner
         $fixed = [];
         foreach ($this->ai->generateImages($jobs) as $i => $img) {
             if (is_array($img)) {
-                $fixed[$i] = $this->saveImage($img, $result, $items[$i]['concept'], $items[$i]['texts'], $briefId);
+                $fixed[$i] = $this->saveImage($img, $result, $items[$i]['concept'], $items[$i]['texts'], $briefId, $items[$i]['cta'] ?? null);
             }
         }
         if (!$fixed) {
@@ -400,7 +409,7 @@ final class GraphicDesigner
         if (is_string($img)) {
             throw new RuntimeException('AI tuzata olmadi: ' . $img);
         }
-        $new = $this->saveImage($img, $d, 'Tuzatilgan: ' . mb_strimwidth($instruction, 0, 40, '…'), $item['texts'] ?? [], (int) $d['brief_id']);
+        $new = $this->saveImage($img, $d, 'Tuzatilgan: ' . mb_strimwidth($instruction, 0, 40, '…'), $item['texts'] ?? [], (int) $d['brief_id'], $item['cta'] ?? null);
         $new = $this->checkTexts([$new], (int) $d['brief_id'])[0];
         if ($carousel) {
             $d['slide_meta'][$index] = $new;
@@ -486,7 +495,8 @@ final class GraphicDesigner
         $slides = [];
         foreach ((array) ($data['slides'] ?? []) as $s) {
             if (is_array($s) && $str($s['headline'] ?? '') !== '') {
-                $slides[] = ['headline' => $str($s['headline']), 'subline' => $str($s['subline'] ?? ''), 'prompt' => trim((string) ($s['prompt'] ?? ''))];
+                $slides[] = ['headline' => $str($s['headline']), 'subline' => $str($s['subline'] ?? ''), 'kicker' => self::shortLine($str($s['kicker'] ?? '')),
+                             'accent' => $str($s['accent'] ?? ''), 'prompt' => trim((string) ($s['prompt'] ?? ''))];
             }
         }
         foreach ($slides as $k => $sl) {
@@ -495,6 +505,7 @@ final class GraphicDesigner
         return [
             'headline' => $str($data['headline'] ?? ''), 'subline' => self::shortLine($str($data['subline'] ?? '')),
             'price' => $str($data['price'] ?? ''), 'badge' => $str($data['badge'] ?? ''),
+            'kicker' => self::shortLine($str($data['kicker'] ?? '')), 'accent' => $str($data['accent'] ?? ''),
             'concepts' => $concepts, 'slides' => $slides, 'alt_text' => trim((string) ($data['alt_text'] ?? '')),
         ];
     }
@@ -513,18 +524,29 @@ final class GraphicDesigner
     /** @return array<string, string> rasmga yoziladigan matnlar */
     private static function texts(array $p): array
     {
+        $accent = (string) ($p['accent'] ?? '');
+        // Professional postda yozuv kam: sarlavha + ko'pi bilan 2 ta qo'shimcha (narx muhimroq)
+        $extra = array_slice(array_filter([
+            'Price badge' => $p['price'] ?? '', 'Kicker (small line above the headline)' => $p['kicker'] ?? '',
+            'Sub-line' => $p['subline'] ?? '', 'Small badge' => $p['badge'] ?? '',
+        ], static fn ($t) => $t !== ''), 0, 2, true);
         return array_filter([
-            'Headline' => $p['headline'] ?? '', 'Sub-line' => $p['subline'] ?? '',
-            'Price badge' => $p['price'] ?? '', 'Small badge' => $p['badge'] ?? '',
-        ], static fn ($t) => $t !== '');
+            'Headline' => $p['headline'] ?? '',
+            // Urg'u so'zi sarlavhaning ichida bo'lsagina (aks holda ortiqcha so'z yozilib qoladi)
+            'Accent word' => $accent !== '' && mb_stripos((string) ($p['headline'] ?? ''), $accent) !== false ? $accent : '',
+        ] + $extra, static fn ($t) => $t !== '');
     }
 
-    /** Pastki yozuv: faqat sotuv posti (narx bor yoki reklama) — telefon. */
-    private function bottomText(array $result): string
+    /** Pastki tugma matni: sotuv posti — telefon, boshqasi — "Batafsil izohda" (seriya bir xil ko'rinsin). */
+    private function ctaText(array $result): string
     {
-        $phone = trim((string) preg_replace('/\s*\(.*?\)/u', '', (string) ($this->brand['phone'] ?? '')));
         $sales = ($result['price'] ?? '') !== '' || ($result['format'] ?? '') === 'reklama';
-        return $sales ? $phone : ''; // oddiy postda pastki burchak bo'sh qoladi (rasm toza ko'rinsin)
+        return $sales && $this->phone() !== '' ? $this->phone() : 'Batafsil izohda';
+    }
+
+    private function phone(): string
+    {
+        return trim((string) preg_replace('/\s*\(.*?\)/u', '', (string) ($this->brand['phone'] ?? '')));
     }
 
     private function topic(int $briefId): string
