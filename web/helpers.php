@@ -122,7 +122,7 @@ function check_badge(?array $check): string
 function layout_badge(?array $layout): string
 {
     if ($layout === null) {
-        return '';
+        return '<span class="chk bad" title="Joylashuv o\'lchovchisi javob bermadi — logo standart joyga qo\'yildi">📐 o\'lchanmadi</span>';
     }
     return empty($layout['problems'])
         ? '<span class="chk ok" title="Yozuvlar, logo va tugma bir-biriga tegmaydi">📐 Joylashuv toza</span>'
@@ -184,7 +184,7 @@ function design_view(array $design): void
             $isChosen = $chosen === $i;
             $src = e(url(['d' => $id, 'v' => $i]));
             echo '<div class="vcard' . ($isChosen ? ' chosen' : '') . '"><a href="' . $src . '" target="_blank"><img src="' . $src . '" alt="' . e($v['concept']) . '" loading="lazy"></a>'
-               . '<div class="vmeta"><b>' . ($i + 1) . '. ' . e($v['concept']) . '</b>' . review_badge($v['review'] ?? null) . layout_badge($v['layout'] ?? null) . check_badge($v['check'] ?? null) . '</div><div class="vact">';
+               . '<div class="vmeta"><b>' . ($i + 1) . '. ' . e($v['concept']) . '</b>' . review_badge($v['review'] ?? null) . (array_key_exists('layout', $v) ? layout_badge($v['layout']) : '') . check_badge($v['check'] ?? null) . '</div><div class="vact">';
             if ($isChosen) {
                 echo '<span class="chk ok">★ ' . ($carousel ? 'Muqova' : 'Tanlangan') . '</span>';
             } else {
@@ -207,7 +207,7 @@ function design_view(array $design): void
                 continue;
             }
             echo '<div class="slide"><a href="' . e(url(['d' => $id, 's' => $i, 'dl' => 1])) . '" title="Yuklab olish"><img src="' . e(url(['d' => $id, 's' => $i])) . '" alt="' . ($i + 1) . '-slayd" loading="lazy"></a>'
-               . '<div class="vmeta"><b>' . ($i + 1) . '-slayd</b>' . review_badge($meta['review'] ?? null) . layout_badge($meta['layout'] ?? null) . check_badge($meta['check'] ?? null) . '</div>'
+               . '<div class="vmeta"><b>' . ($i + 1) . '-slayd</b>' . review_badge($meta['review'] ?? null) . (array_key_exists('layout', $meta ?? []) ? layout_badge($meta['layout']) : '') . check_badge($meta['check'] ?? null) . '</div>'
                . ($meta && $i > 0 ? fix_form($id, $i, $meta['check'] ?? null, $return, 's', $meta['review'] ?? null) : ($i === 0 ? '<p class="small muted">Muqova — yuqorida tuzatiladi</p>' : '')) . '</div>';
         }
         echo '</div>';

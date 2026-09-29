@@ -15,6 +15,6 @@ darajada va shu tizimda chizadi. Mavzu (marketing, sayohat...) muhim emas — us
 ## Javob formati — faqat JSON:
 {
   "summary_uz": "Egasiga 2-3 gapda o'zbekcha: bu uslubning mohiyati",
-  "art_direction_en": "Detailed English design-system brief (8-12 lines, bullet style): COLOUR, TYPOGRAPHY, HERO SUBJECT, ACCENTS, LAYOUT, FINISH. Use the placeholders {DARK} and {ACCENT} instead of concrete colours so the brand palette can be applied. Write it so it works for any travel topic.",
+  "art_direction_en": "Detailed English design-system brief (8-12 lines, bullet style): COLOUR, TYPOGRAPHY, HERO SUBJECT, ACCENTS, LAYOUT, FINISH. Use the placeholders {DARK} and {ACCENT} instead of concrete colours so the brand palette can be applied. Write it so it works for any travel topic. Do NOT mention logos, brand names, watermarks or page numbers at all (the real logo is added separately); text must never overlap text, and objects must never hide words.",
   "palette": {"dark": "#111111", "accent": "#f5c518"}
 }

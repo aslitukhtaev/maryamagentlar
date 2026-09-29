@@ -242,6 +242,7 @@ final class PostRenderer
         $ch = (int) ($this->h / $scale);
         [$ox, $oy] = [(int) (($sw - $cw) / 2), (int) (($sh - $ch) / 2)];
         imagecopyresampled($this->img, $src, 0, 0, $ox, $oy, $this->w, $this->h, $cw, $ch);
+        $this->headerBand();
         // Asl rasm koordinatalari (0..1000) → yakuniy kanvas piksellari (kesish va masshtabni hisobga olib)
         $boxes = array_map(fn ($b) => [
             (int) (($b[1] / 1000 * $sw - $ox) * $scale), (int) (($b[0] / 1000 * $sh - $oy) * $scale),
@@ -541,6 +542,33 @@ final class PostRenderer
     }
 
     /** Logo plashkada: oq logo — to'q shaffof plashkada, rangli logo — oq plashkada; logo yo'q — so'z-belgi. */
+    /** Tepadagi logo zonasi (kanvas balandligiga nisbatan). AI shu yerga nima chizgan bo'lsa ham — yopiladi. */
+    public const HEADER = 0.12;
+
+    /**
+     * Logo zonasini rasmning o'z fon rangi bilan yumshoq yopadi (tepada to'liq, pastga qarab eriydi).
+     * AI qoidani buzib logo yoki brend nomi chizgan bo'lsa ham, u ko'rinmaydi — faqat bitta haqiqiy logo qoladi.
+     */
+    private function headerBand(): void
+    {
+        $bandH = (int) ($this->h * self::HEADER);
+        // Fon rangi: zona ostidagi qatordan (o'rtacha, eng yorug' 20% — yozuv/porlash — hisobga olinmaydi)
+        $px = [];
+        $y = min($this->h - 1, $bandH + 14);
+        for ($x = 0; $x < $this->w; $x += 12) {
+            $c = imagecolorat($this->img, $x, $y);
+            $px[] = [($c >> 16) & 255, ($c >> 8) & 255, $c & 255];
+        }
+        usort($px, static fn ($a, $b) => array_sum($a) <=> array_sum($b));
+        $px = array_slice($px, 0, max(1, (int) (count($px) * 0.8)));
+        [$r, $g, $b] = array_map(static fn ($i) => (int) (array_sum(array_column($px, $i)) / count($px)), [0, 1, 2]);
+        $solid = (int) ($bandH * 0.72);
+        for ($yy = 0; $yy < $bandH + 40; $yy++) {
+            $a = $yy <= $solid ? 0 : (int) min(127, ($yy - $solid) / ($bandH + 40 - $solid) * 127);
+            imageline($this->img, 0, $yy, $this->w, $yy, imagecolorallocatealpha($this->img, $r, $g, $b, $a));
+        }
+    }
+
     /** Logo belgisining o'lchami (joy tanlash uchun). */
     private function badgeSize(): array
     {

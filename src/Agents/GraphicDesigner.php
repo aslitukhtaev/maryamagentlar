@@ -344,7 +344,8 @@ final class GraphicDesigner
         if ($nPhotos) {
             $p .= "PEOPLE: the next $nPhotos attached photo(s) show real people from our team/clients. Use these exact people as the hero cut-out — keep face, identity and skin tone unchanged, realistic, with matching light.\n";
         }
-        $p .= "DESIGN SYSTEM (follow strictly — every post of this brand must look like part of one series):\n" . DesignSystem::artDirection($this->store) . "\n";
+        $p .= "DESIGN SYSTEM (follow strictly — every post of this brand must look like part of one series):\n" . self::noLogo(DesignSystem::artDirection($this->store)) . "\n";
+        $concept = self::noLogo($concept);
         $p .= "Palette: dark {$pal['dark']}, accent {$pal['accent']}, white. No other colours in graphics or type.\n";
         $p .= "THIS POST: $concept\n";
         $p .= "TEXT — render exactly these texts, spelled letter-for-letter in Uzbek Latin script (keep the apostrophe in O‘ and G‘), and no other words:\n";
@@ -361,6 +362,17 @@ final class GraphicDesigner
             . "No stamps, labels or words other than the texts listed above (no \"REJECTED\", no English words). No Instagram handle, phone number, website, buttons or \"swipe\". "
             . "Keep the top 10% and the bottom 10% of the canvas free of text and faces — our real logo and a call-to-action button are placed there afterwards.";
         return $p;
+    }
+
+    /**
+     * Rasm modeliga ketadigan matndan logo/brend haqidagi har qanday jumla olib tashlanadi (art-direktor konsepti yoki
+     * uslub namunasi tahlili "tepada logo" desa ham) — aks holda model o'zi logo chizib, haqiqiy logo bilan ustma-ust tushadi.
+     */
+    private static function noLogo(string $text): string
+    {
+        $parts = preg_split('/(?<=[.;!?\n])\s*/u', $text) ?: [$text];
+        $keep = array_filter($parts, static fn ($s) => !preg_match('/\b(logo\w*|brand\s*(name|mark)|wordmark|watermark|emblem|monogram|maryam|travel\s+agency\s+name)\b/iu', $s));
+        return trim(implode(' ', $keep));
     }
 
     /** @return array{path: string, raw: string, concept: string, texts: array, model: string, check: ?array} */
@@ -419,7 +431,9 @@ final class GraphicDesigner
         foreach ($todo as $i => $it) {
             $elements = $found[$i] ?? null;
             // Logo va tugma yozuv, AI logosi va yuzlarga tegmasin
-            $avoid = array_column(array_filter($elements ?? [], static fn ($e) => in_array($e['type'], ['text', 'logo', 'face'], true)), 'box');
+            // (tepa zonadagi AI logosi baribir yopiladi — logo joyini band qilmaydi)
+            $avoid = array_column(array_filter($elements ?? [], static fn ($e) => in_array($e['type'], ['text', 'logo', 'face'], true)
+                && !($e['type'] === 'logo' && self::inHeader($e['box']))), 'box');
             file_put_contents($it['path'], $renderer->finishPoster((string) file_get_contents($it['raw']), (string) ($it['format'] ?? 'post'), (string) $it['cta'], $colors, $avoid));
             $items[$i]['finished'] = true;
             $items[$i]['layout'] = $elements === null ? null : self::layoutProblems($elements, $it['texts'] ?? [], $renderer->placement);
@@ -431,6 +445,12 @@ final class GraphicDesigner
      * Kod bilan qat'iy tekshiruv (taxmin emas, o'lchov): natija — egasiga o'zbekcha muammolar va rasm modeliga inglizcha tuzatish.
      * @return array{problems: string[], fix: string, elements: int}
      */
+    /** Element butunlay tepadagi logo zonasida (u yerni kod yopadi). Koordinatalar 0..1000. */
+    private static function inHeader(array $box): bool
+    {
+        return $box[2] <= PostRenderer::HEADER * 1000 + 8;
+    }
+
     private static function layoutProblems(array $elements, array $texts, array $placement): array
     {
         $problems = [];
@@ -443,7 +463,7 @@ final class GraphicDesigner
         $textEls = array_values(array_filter($elements, static fn ($e) => $e['type'] === 'text' && $e['text'] !== ''));
 
         foreach ($elements as $e) {
-            if ($e['type'] === 'logo') {
+            if ($e['type'] === 'logo' && !self::inHeader($e['box'])) { // tepa zonadagisi yopiladi — ko'rinmaydi
                 $problems[] = "AI o'zi logo/brend nomi chizgan" . ($e['text'] !== '' ? " (\"{$e['text']}\")" : '') . ' — haqiqiy logo bilan takrorlanadi';
                 $fix[] = 'Remove the logo / brand name / wordmark' . ($e['text'] !== '' ? " \"{$e['text']}\"" : '') . ' at the ' . $where($e['box']) . ' completely and fill that area with the background';
             }
@@ -462,11 +482,19 @@ final class GraphicDesigner
             $t = $norm($e['text']);
             $words = array_values(array_filter(array_map($norm, preg_split('/\s+/u', $e['text']))));
             $unknown = array_filter($words, static fn ($w) => !$known($w));
-            if ($t !== '' && !str_contains($expected, $t) && count($unknown) > 0) {
+            $extra = $t !== '' && !str_contains($expected, $t) && count($unknown) > 0;
+            if ($extra && self::inHeader($e['box'])) {
+                continue; // AI tepaga yozgan ortiqcha yozuv (masalan brend nomi) — logo zonasi bilan yopiladi, ko'rinmaydi
+            }
+            if ($extra) {
                 $problems[] = "Buyurtmada yo'q ortiqcha yozuv: \"{$e['text']}\"";
                 $fix[] = "Remove the extra text \"{$e['text']}\" completely";
             }
             [$y1, $x1, $y2, $x2] = $e['box'];
+            if ($y1 < PostRenderer::HEADER * 1000 - 5) { // logo zonasi yopiladi — undagi yozuv ko'rinmay qoladi
+                $problems[] = "\"{$e['text']}\" yozuvi tepadagi logo zonasiga kirib qolgan";
+                $fix[] = "Move the text \"{$e['text']}\" lower so the top 13% of the image stays completely empty";
+            }
             if ($x1 < 12 || $y1 < 8 || $x2 > 988 || $y2 > 992) {
                 $problems[] = "\"{$e['text']}\" yozuvi rasm chetiga tegib/kesilib turibdi";
                 $fix[] = "Move the text \"{$e['text']}\" inward so it has a clear margin from the edge";
@@ -478,6 +506,15 @@ final class GraphicDesigner
                 if ($i > 0.12 * min($area($textEls[$a]['box']), $area($textEls[$b]['box']))) {
                     $problems[] = "\"{$textEls[$a]['text']}\" va \"{$textEls[$b]['text']}\" yozuvlari ustma-ust";
                     $fix[] = "Separate the texts \"{$textEls[$a]['text']}\" and \"{$textEls[$b]['text']}\" so they do not overlap at all, with clear space between them";
+                }
+            }
+        }
+        // Qahramon obyekt/qo'l harflarni yengil qoplashi mumkin, lekin so'zning 20% dan ko'pini yopsa — o'qilmaydi
+        foreach (array_filter($elements, static fn ($e) => in_array($e['type'], ['object', 'hand'], true)) as $o) {
+            foreach ($textEls as $e) {
+                if ($inter($o['box'], $e['box']) > 0.2 * $area($e['box'])) {
+                    $problems[] = "\"{$e['text']}\" yozuvini rasm (obyekt) yopib qo'ygan — o'qilishi qiyin";
+                    $fix[] = "Move the object so it no longer covers the text \"{$e['text']}\"; every letter must be fully readable";
                 }
             }
         }
@@ -552,39 +589,45 @@ final class GraphicDesigner
     {
         $say('3/4 Yozuvlar va dizayn sifati tekshirilmoqda...');
         $items = $this->inspect($items, $briefId);
-        $bad = array_filter($items, fn ($it) => $this->needsWork($it) && is_file((string) ($it['raw'] ?? '')));
-        if (!$bad || Env::get('DESIGN_AUTOFIX', '1') === '0') {
+        if (Env::get('DESIGN_AUTOFIX', '1') === '0') {
             return $items;
         }
-        $say('3/4 ' . count($bad) . " ta rasmda kamchilik topildi (ustma-ust yozuv, tartib yoki imlo) — AI o'zi tuzatmoqda...");
-        $jobs = [];
-        foreach ($bad as $i => $it) {
-            $rv = $it['review'] ?? [];
-            if (($rv['action'] ?? '') === 'regenerate' && isset($src[$i]['prompt'])) {
-                // Kompozitsiya yomon — qaytadan, kamchiliklarni aytib
-                $jobs[$i] = array_diff_key($src[$i], ['name' => 1]);
-                $jobs[$i]['prompt'] .= "\nA PREVIOUS ATTEMPT WAS REJECTED BY THE ART DIRECTOR: " . trim(($rv['issues'] ?? '') . ' ' . ($rv['avoid'] ?? '') . ' ' . ($it['layout']['fix'] ?? ''))
-                    . ' Make sure no text overlaps other text, faces, the top-centre logo area or the bottom-centre button area; keep generous margins and a clean hierarchy.';
-            } else {
-                $textFix = ($it['check']['ok'] ?? true) === false ? (string) ($it['check']['fix'] ?? '') : '';
-                // O'lchov topgan aniq muammolar birinchi (logo, ustma-ust, ortiqcha yozuv), keyin imlo, keyin art-direktor
-                $fix = array_filter([(string) ($it['layout']['fix'] ?? ''), $textFix, (string) ($rv['fix'] ?? '')]);
-                $jobs[$i] = $this->editJob($it, implode('. ', $fix) ?: 'Fix overlapping text: move text so nothing overlaps, keep all text inside the frame with clear margins', $result['format']);
+        // 2 raundgacha: birinchi raunddan keyin ham muammo qolsa — yana (ustma-ust/logo kabi xatolar egasiga yetmasin)
+        for ($round = 1; $round <= 2; $round++) {
+            $bad = array_filter($items, fn ($it) => $this->needsWork($it) && is_file((string) ($it['raw'] ?? '')));
+            if (!$bad) {
+                break;
             }
-        }
-        $fixed = [];
-        foreach ($this->ai->generateImages($jobs) as $i => $img) {
-            if (is_array($img)) {
-                $fixed[$i] = $this->saveImage($img, $result, $items[$i]['concept'], $items[$i]['texts'], $briefId, $items[$i]['cta'] ?? null);
+            $say('3/4 ' . count($bad) . " ta rasmda kamchilik topildi (ustma-ust yozuv, logo, tartib yoki imlo) — AI o'zi tuzatmoqda" . ($round > 1 ? ' (2-marta)' : '') . '...');
+            $jobs = [];
+            foreach ($bad as $i => $it) {
+                $rv = $it['review'] ?? [];
+                if (($rv['action'] ?? '') === 'regenerate' && isset($src[$i]['prompt'])) {
+                    // Kompozitsiya yomon — qaytadan, kamchiliklarni aytib
+                    $jobs[$i] = array_diff_key($src[$i], ['name' => 1]);
+                    $jobs[$i]['prompt'] .= "\nA PREVIOUS ATTEMPT WAS REJECTED BY THE ART DIRECTOR: " . trim(($rv['issues'] ?? '') . ' ' . ($rv['avoid'] ?? '') . ' ' . ($it['layout']['fix'] ?? ''))
+                        . ' Make sure no text overlaps other text or faces, there is no logo or brand name anywhere, and the top 13% and bottom 10% stay empty; keep generous margins and a clean hierarchy.';
+                } else {
+                    $textFix = ($it['check']['ok'] ?? true) === false ? (string) ($it['check']['fix'] ?? '') : '';
+                    // O'lchov topgan aniq muammolar birinchi (logo, ustma-ust, ortiqcha yozuv), keyin imlo, keyin art-direktor
+                    $fix = array_filter([(string) ($it['layout']['fix'] ?? ''), $textFix, (string) ($rv['fix'] ?? '')]);
+                    $jobs[$i] = $this->editJob($it, implode('. ', $fix) ?: 'Fix overlapping text: move text so nothing overlaps, keep all text inside the frame with clear margins', $result['format']);
+                }
             }
-        }
-        if (!$fixed) {
-            return $items;
-        }
-        $checked = $this->inspect(array_values($fixed), $briefId);
-        foreach (array_keys($fixed) as $n => $i) {
-            if (self::rank($checked[$n]) >= self::rank($items[$i])) { // yaxshirog'i qoladi
-                $items[$i] = $checked[$n] + ['autofixed' => true];
+            $fixed = [];
+            foreach ($this->ai->generateImages($jobs) as $i => $img) {
+                if (is_array($img)) {
+                    $fixed[$i] = $this->saveImage($img, $result, $items[$i]['concept'], $items[$i]['texts'], $briefId, $items[$i]['cta'] ?? null);
+                }
+            }
+            if (!$fixed) {
+                break;
+            }
+            $checked = $this->inspect(array_values($fixed), $briefId);
+            foreach (array_keys($fixed) as $n => $i) {
+                if (self::rank($checked[$n]) >= self::rank($items[$i])) { // yaxshirog'i qoladi
+                    $items[$i] = $checked[$n] + ['autofixed' => true];
+                }
             }
         }
         return $items;
