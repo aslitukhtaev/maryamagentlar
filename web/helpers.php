@@ -118,6 +118,17 @@ function check_badge(?array $check): string
         : '<span class="chk bad" title="' . e($check['found'] ?? '') . '">⚠ ' . e($check['issues'] ?: 'Yozuvda xato bo\'lishi mumkin') . '</span>';
 }
 
+/** Joylashuv o'lchovi natijasi: muammo bo'lsa — ro'yxati (ustma-ust yozuv, AI logosi, ortiqcha yozuv...). */
+function layout_badge(?array $layout): string
+{
+    if ($layout === null) {
+        return '';
+    }
+    return empty($layout['problems'])
+        ? '<span class="chk ok" title="Yozuvlar, logo va tugma bir-biriga tegmaydi">📐 Joylashuv toza</span>'
+        : '<span class="chk bad">📐 ' . e(implode('; ', $layout['problems'])) . '</span>';
+}
+
 /** Art-direktor bahosi belgisi: "🎨 8/10" (past bo'lsa — sababi bilan). */
 function review_badge(?array $review): string
 {
@@ -133,6 +144,7 @@ function review_badge(?array $review): string
 function fix_form(int $id, int $index, ?array $check, string $return, string $target = 'v', ?array $review = null): string
 {
     $visual = $review && ((int) $review['score'] < 7 || !empty($review['overlap'])) && $review['issues'] !== '' ? $review['issues'] : '';
+    // (joylashuv muammolari fon ishida avtomatik tuzatiladi; qolgan bo'lsa — forma shu bilan to'ldiriladi)
     $bad = ($check && !$check['ok']) || $visual !== '';
     return '<details class="fix"' . ($bad ? ' open' : '') . '><summary>✏️ Tuzatish</summary><form method="post" ' . busy_attr() . '>' . csrf_field()
         . '<input type="hidden" name="action" value="design_fix"><input type="hidden" name="id" value="' . $id . '">'
@@ -172,7 +184,7 @@ function design_view(array $design): void
             $isChosen = $chosen === $i;
             $src = e(url(['d' => $id, 'v' => $i]));
             echo '<div class="vcard' . ($isChosen ? ' chosen' : '') . '"><a href="' . $src . '" target="_blank"><img src="' . $src . '" alt="' . e($v['concept']) . '" loading="lazy"></a>'
-               . '<div class="vmeta"><b>' . ($i + 1) . '. ' . e($v['concept']) . '</b>' . review_badge($v['review'] ?? null) . check_badge($v['check'] ?? null) . '</div><div class="vact">';
+               . '<div class="vmeta"><b>' . ($i + 1) . '. ' . e($v['concept']) . '</b>' . review_badge($v['review'] ?? null) . layout_badge($v['layout'] ?? null) . check_badge($v['check'] ?? null) . '</div><div class="vact">';
             if ($isChosen) {
                 echo '<span class="chk ok">★ ' . ($carousel ? 'Muqova' : 'Tanlangan') . '</span>';
             } else {
@@ -195,7 +207,7 @@ function design_view(array $design): void
                 continue;
             }
             echo '<div class="slide"><a href="' . e(url(['d' => $id, 's' => $i, 'dl' => 1])) . '" title="Yuklab olish"><img src="' . e(url(['d' => $id, 's' => $i])) . '" alt="' . ($i + 1) . '-slayd" loading="lazy"></a>'
-               . '<div class="vmeta"><b>' . ($i + 1) . '-slayd</b>' . review_badge($meta['review'] ?? null) . check_badge($meta['check'] ?? null) . '</div>'
+               . '<div class="vmeta"><b>' . ($i + 1) . '-slayd</b>' . review_badge($meta['review'] ?? null) . layout_badge($meta['layout'] ?? null) . check_badge($meta['check'] ?? null) . '</div>'
                . ($meta && $i > 0 ? fix_form($id, $i, $meta['check'] ?? null, $return, 's', $meta['review'] ?? null) : ($i === 0 ? '<p class="small muted">Muqova — yuqorida tuzatiladi</p>' : '')) . '</div>';
         }
         echo '</div>';

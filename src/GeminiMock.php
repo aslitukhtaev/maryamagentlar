@@ -113,6 +113,16 @@ class GeminiMock
                    ], 'alt_text' => 'Istanbul haqida karusel']
                 : ['kicker' => '5 kunlik tur', 'headline' => 'ISTANBUL 775$ DAN', 'accent' => 'ISTANBUL', 'subline' => 'Har kuni uchish · 5 kun', 'price' => '775$ dan', 'badge' => 'QAYNOQ TUR',
                    'concepts' => $concepts, 'slides' => [], 'alt_text' => "Istanbul, Galata minorasi oqshom yorug'ida"];
+        } elseif (str_contains($system, "joylashuvini o'lchovchi")) {
+            // Sinov: bir nechta rasmli o'lchovda 2-rasm egasining skrinshotidagidek — AI chizgan logo tepada va ustma-ust yozuvlar
+            $n = max(1, count($images));
+            $clean = [['type' => 'text', 'text' => 'ISTANBUL 775$ DAN', 'box' => [420, 60, 560, 940]], ['type' => 'object', 'text' => '', 'box' => [560, 200, 850, 800]]];
+            $data = ['results' => array_map(static fn ($i) => ['index' => $i, 'elements' => $n > 1 && $i === 1 ? [
+                ['type' => 'logo', 'text' => 'Maryam Travel', 'box' => [20, 380, 80, 620]],
+                ['type' => 'text', 'text' => 'RAD', 'box' => [140, 80, 330, 700]],
+                ['type' => 'text', 'text' => 'VIZA ETILISHINING', 'box' => [230, 80, 400, 720]],
+                ['type' => 'text', 'text' => 'REJECTED', 'box' => [520, 260, 600, 700]],
+            ] : $clean], range(0, $n - 1))];
         } elseif (str_contains($system, 'vizual sifat nazoratchisisan')) {
             // Sinov: ko'p rasmli tekshiruvda 3-rasm xunuk (qayta chizish), qolganlari yaxshi; bitta rasm (tuzatilgan) — yaxshi
             $n = max(1, count($images));

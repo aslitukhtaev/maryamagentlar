@@ -215,7 +215,14 @@ final class PostRenderer
      * AI chizgan tayyor rasmni yakunlaydi: aniq o'lcham (1080×1350 yoki 1080×1920), tepada haqiqiy logo,
      * pastda telefon/Instagram (AI bularni buzib yozadi — shuning uchun kod qo'yadi). JPEG qaytaradi.
      */
-    public function finishPoster(string $imageBytes, string $format, string $bottomText, array $colors): string
+    /** Oxirgi finishPoster: logo/tugma bo'sh joy topdimi (topmasa — rasm qayta tuzatiladi). */
+    public array $placement = ['logo_free' => true, 'cta_free' => true, 'logo' => 'top-centre', 'cta' => 'bottom-centre'];
+
+    /**
+     * @param array<int, array{0:int,1:int,2:int,3:int}> $avoid AI rasmidagi yozuv/yuz/logo to'rtburchaklari
+     *        [ymin, xmin, ymax, xmax] 0..1000 (asl rasmga nisbatan) — logo va tugma ularga tegmaydigan joyga qo'yiladi
+     */
+    public function finishPoster(string $imageBytes, string $format, string $bottomText, array $colors, array $avoid = []): string
     {
         $src = @imagecreatefromstring($imageBytes);
         if (!$src) {
@@ -233,16 +240,49 @@ final class PostRenderer
         $scale = max($this->w / $sw, $this->h / $sh);
         $cw = (int) ($this->w / $scale);
         $ch = (int) ($this->h / $scale);
-        imagecopyresampled($this->img, $src, 0, 0, (int) (($sw - $cw) / 2), (int) (($sh - $ch) / 2), $this->w, $this->h, $cw, $ch);
-        // Logo — tepada markazda (seriyaning doimiy joyi); tugma — pastda markazda, urg'u rangida
-        $this->logoBadge(null, 34);
+        [$ox, $oy] = [(int) (($sw - $cw) / 2), (int) (($sh - $ch) / 2)];
+        imagecopyresampled($this->img, $src, 0, 0, $ox, $oy, $this->w, $this->h, $cw, $ch);
+        // Asl rasm koordinatalari (0..1000) → yakuniy kanvas piksellari (kesish va masshtabni hisobga olib)
+        $boxes = array_map(fn ($b) => [
+            (int) (($b[1] / 1000 * $sw - $ox) * $scale), (int) (($b[0] / 1000 * $sh - $oy) * $scale),
+            (int) (($b[3] / 1000 * $sw - $ox) * $scale), (int) (($b[2] / 1000 * $sh - $oy) * $scale),
+        ], array_filter($avoid, static fn ($b) => is_array($b) && count($b) === 4));
+        $free = static function (array $r) use ($boxes): bool {
+            foreach ($boxes as [$x1, $y1, $x2, $y2]) {
+                if ($r[0] < $x2 + 12 && $r[2] > $x1 - 12 && $r[1] < $y2 + 12 && $r[3] > $y1 - 12) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        // Logo: tepa markaz → chap burchak → o'ng burchak — birinchi bo'sh joyga (hech qachon yozuv ustiga emas)
+        [$bw, $bh] = $this->badgeSize();
+        $spots = ['top-centre' => [(int) (($this->w - $bw) / 2), 34], 'top-left' => [40, 34], 'top-right' => [$this->w - $bw - 40, 34]];
+        $this->placement = ['logo_free' => false, 'cta_free' => true, 'logo' => 'top-centre', 'cta' => 'bottom-centre'];
+        foreach ($spots as $name => [$lx, $ly]) {
+            if ($free([$lx, $ly, $lx + $bw, $ly + $bh])) {
+                $this->placement['logo'] = $name;
+                $this->placement['logo_free'] = true;
+                break;
+            }
+        }
+        [$lx, $ly] = $spots[$this->placement['logo']];
+        $this->logoBadge($lx, $ly);
         $line = $this->clean($bottomText);
         if ($line !== '') {
             $f = $this->fit($line, 'Bold', 30, 22, 620, 1);
             $lw = $this->width($f['lines'][0], 'Bold', $f['size']);
             $bw = $lw + 72;
-            $x1 = (int) (($this->w - $bw) / 2);
             [$y1, $y2] = [$this->h - 112, $this->h - 48];
+            $cta = ['bottom-centre' => (int) (($this->w - $bw) / 2), 'bottom-left' => 40, 'bottom-right' => $this->w - $bw - 40];
+            $this->placement['cta_free'] = false;
+            foreach ($cta as $name => $cx) {
+                if ($free([$cx, $y1, $cx + $bw, $y2])) {
+                    [$this->placement['cta'], $this->placement['cta_free']] = [$name, true];
+                    break;
+                }
+            }
+            $x1 = $cta[$this->placement['cta']];
             $this->roundRect($x1 + 3, $y1 + 5, $x1 + $bw + 3, $y2 + 5, 32, $this->alpha('dark', 70)); // yumshoq soya
             $this->roundRect($x1, $y1, $x1 + $bw, $y2, 32, $this->c['accent']);
             $this->text($f['lines'][0], 'Bold', $f['size'], $x1 + 36, $y1 + 32 + (int) ($f['size'] * 0.5), $this->c['dark']);
@@ -501,6 +541,20 @@ final class PostRenderer
     }
 
     /** Logo plashkada: oq logo — to'q shaffof plashkada, rangli logo — oq plashkada; logo yo'q — so'z-belgi. */
+    /** Logo belgisining o'lchami (joy tanlash uchun). */
+    private function badgeSize(): array
+    {
+        $white = $this->logoWhitePath && is_file($this->logoWhitePath);
+        $path = $white ? $this->logoWhitePath : ($this->logoPath && is_file($this->logoPath) ? $this->logoPath : null);
+        $size = $path ? @getimagesize(BrandAssets::cleanLogo($path)) : false;
+        if ($size) {
+            $scale = min(52 / $size[1], 210 / $size[0]);
+            return [(int) ($size[0] * $scale) + 44, (int) ($size[1] * $scale) + 24];
+        }
+        $name = mb_strtoupper(explode(' ', (string) ($this->brand['name'] ?? 'MARYAM'))[0]);
+        return [$this->width($name, 'Display', 30) + 44, 64];
+    }
+
     private function logoBadge(?int $x, int $y): void
     {
         $white = $this->logoWhitePath && is_file($this->logoWhitePath);

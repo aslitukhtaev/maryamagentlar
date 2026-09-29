@@ -336,7 +336,8 @@ final class GraphicDesigner
     {
         $pal = DesignSystem::palette($this->store);
         $canvas = $format === 'reels' ? 'vertical 9:16 Instagram Stories/Reels cover' : 'vertical 4:5 Instagram feed post';
-        $p = "Design a finished $canvas for \"Maryam Travel\", a travel agency in Uzbekistan, at the level of a top creative agency's portfolio — bold, precise, strongly arranged, premium.\n";
+        // Brend nomi ataylab aytilmaydi — aks holda model o'zi logo/so'z-belgi chizib, haqiqiy logo bilan ustma-ust tushadi
+        $p = "Design a finished $canvas for a travel agency in Uzbekistan, at the level of a top creative agency's portfolio — bold, precise, strongly arranged, premium.\n";
         if ($nRefs) {
             $p .= "STYLE REFERENCE: the first $nRefs attached image(s) show the exact design level and system we want. Replicate their art direction — typography scale and hierarchy, layering of the cut-out subject with the headline, graphic accents, lighting, composition and finish — but with our own topic, texts and colours. Do NOT copy their words, logos or people.\n";
         }
@@ -355,8 +356,10 @@ final class GraphicDesigner
         if (!empty($texts['Accent word'])) {
             $p .= "The key word to set enormous in the accent colour: \"{$texts['Accent word']}\".\n";
         }
-        $p .= "RULES: text perfectly sharp and correctly spelled; nothing cut off by the frame. Do NOT write the brand name, a logo, Instagram handle, phone number, website, buttons or \"swipe\". "
-            . "Leave the top-centre area (about 30% of the width × 9% of the height) and a bottom-centre strip (about 50% × 9%) empty of text and faces — our logo and a call-to-action button are placed there afterwards, matching the style.";
+        $p .= "RULES: text perfectly sharp and correctly spelled; nothing cut off by the frame; NO text may overlap other text — every text block has clear space around it (the hero subject may pass in front of letters, text never over text or faces). "
+            . "NO logos, emblems, brand names, wordmarks or watermarks anywhere — even if the reference images show a logo at the top, leave that place empty. "
+            . "No stamps, labels or words other than the texts listed above (no \"REJECTED\", no English words). No Instagram handle, phone number, website, buttons or \"swipe\". "
+            . "Keep the top 10% and the bottom 10% of the canvas free of text and faces — our real logo and a call-to-action button are placed there afterwards.";
         return $p;
     }
 
@@ -368,12 +371,133 @@ final class GraphicDesigner
         $bytes = (string) base64_decode($img['base64']);
         $raw = "$dir/ai-$id-raw." . (str_contains($img['mime_type'], 'png') ? 'png' : 'jpg');
         file_put_contents($raw, $bytes);
-        $path = "$dir/ai-$id.jpg";
+        // Yakuniy rasm (logo + tugma) keyin — joylashuv o'lchangach, bo'sh joyga qo'yiladi (finish())
+        return ['path' => "$dir/ai-$id.jpg", 'raw' => $raw, 'concept' => $name, 'texts' => $texts, 'cta' => $cta ?? $this->ctaText($result),
+                'format' => $result['format'], 'model' => (string) ($img['model_used'] ?? ''), 'check' => null, 'finished' => false];
+    }
+
+    /**
+     * JOYLASHUV O'LCHOVCHISI: har rasmdagi yozuv, logo, yuz, qo'l, obyektlarning aniq koordinatalari (bitta so'rovda),
+     * so'ng kod qat'iy tekshiradi (ustma-ust yozuv, AI chizgan logo, ortiqcha yozuv, kesilish, yuz ustidagi matn)
+     * va haqiqiy logo/tugmani BO'SH joyga qo'yib yakuniy rasmni chizadi.
+     */
+    private function finish(array $items, int $briefId): array
+    {
+        $todo = array_filter($items, static fn ($it) => empty($it['finished']) && is_file((string) ($it['raw'] ?? '')));
+        if (!$todo) {
+            return $items;
+        }
+        $images = [];
+        $map = [];
+        foreach ($todo as $i => $it) {
+            $im = @imagecreatefromstring((string) file_get_contents($it['raw']));
+            if (!$im) {
+                continue;
+            }
+            ob_start();
+            imagejpeg(imagescale($im, 900), null, 86);
+            $images[] = ['mime' => 'image/jpeg', 'data' => base64_encode((string) ob_get_clean())];
+            $map[count($images) - 1] = $i;
+        }
+        $found = [];
+        if ($images) {
+            try {
+                $data = Prompts::ask($this->ai, $this->store, 'designer/layout', ['rasmlar_soni' => count($images)], 0.0, true, $briefId, self::NAME, 'layout', $images);
+                foreach ((array) ($data['results'] ?? []) as $r) {
+                    if (isset($map[(int) ($r['index'] ?? -1)])) {
+                        $found[$map[(int) $r['index']]] = array_values(array_filter(array_map(static fn ($e) => is_array($e) && is_array($e['box'] ?? null) && count($e['box']) === 4
+                            ? ['type' => (string) ($e['type'] ?? 'object'), 'text' => trim((string) ($e['text'] ?? '')), 'box' => array_map('intval', $e['box'])] : null, (array) ($r['elements'] ?? []))));
+                    }
+                }
+            } catch (Throwable) {
+                // o'lchov ishlamasa — logo odatiy joyga qo'yiladi, art-direktor baribir ko'radi
+            }
+        }
         $renderer = PostRenderer::forBrand($this->brand, self::style($this->store));
-        $cta ??= $this->ctaText($result);
         $pal = DesignSystem::palette($this->store);
-        file_put_contents($path, $renderer->finishPoster($bytes, $result['format'], $cta, ['primary' => $pal['dark'], 'dark' => $pal['dark'], 'accent' => $pal['accent']]));
-        return ['path' => $path, 'raw' => $raw, 'concept' => $name, 'texts' => $texts, 'cta' => $cta, 'model' => (string) ($img['model_used'] ?? ''), 'check' => null];
+        $colors = ['primary' => $pal['dark'], 'dark' => $pal['dark'], 'accent' => $pal['accent']];
+        foreach ($todo as $i => $it) {
+            $elements = $found[$i] ?? null;
+            // Logo va tugma yozuv, AI logosi va yuzlarga tegmasin
+            $avoid = array_column(array_filter($elements ?? [], static fn ($e) => in_array($e['type'], ['text', 'logo', 'face'], true)), 'box');
+            file_put_contents($it['path'], $renderer->finishPoster((string) file_get_contents($it['raw']), (string) ($it['format'] ?? 'post'), (string) $it['cta'], $colors, $avoid));
+            $items[$i]['finished'] = true;
+            $items[$i]['layout'] = $elements === null ? null : self::layoutProblems($elements, $it['texts'] ?? [], $renderer->placement);
+        }
+        return $items;
+    }
+
+    /**
+     * Kod bilan qat'iy tekshiruv (taxmin emas, o'lchov): natija — egasiga o'zbekcha muammolar va rasm modeliga inglizcha tuzatish.
+     * @return array{problems: string[], fix: string, elements: int}
+     */
+    private static function layoutProblems(array $elements, array $texts, array $placement): array
+    {
+        $problems = [];
+        $fix = [];
+        $norm = static fn (string $t) => preg_replace('/[^a-z0-9]/', '', strtolower(strtr($t, ['‘' => '', '’' => '', "'" => '', 'ʻ' => '', 'ʼ' => ''])));
+        $expected = $norm(implode(' ', $texts));
+        $area = static fn ($b) => max(1, ($b[2] - $b[0]) * ($b[3] - $b[1]));
+        $inter = static fn ($a, $b) => max(0, min($a[2], $b[2]) - max($a[0], $b[0])) * max(0, min($a[3], $b[3]) - max($a[1], $b[1]));
+        $where = static fn ($b) => ($b[0] < 250 ? 'top' : ($b[2] > 750 ? 'bottom' : 'middle')) . '-' . ($b[1] + $b[3] < 700 ? 'left' : ($b[1] + $b[3] > 1300 ? 'right' : 'centre'));
+        $textEls = array_values(array_filter($elements, static fn ($e) => $e['type'] === 'text' && $e['text'] !== ''));
+
+        foreach ($elements as $e) {
+            if ($e['type'] === 'logo') {
+                $problems[] = "AI o'zi logo/brend nomi chizgan" . ($e['text'] !== '' ? " (\"{$e['text']}\")" : '') . ' — haqiqiy logo bilan takrorlanadi';
+                $fix[] = 'Remove the logo / brand name / wordmark' . ($e['text'] !== '' ? " \"{$e['text']}\"" : '') . ' at the ' . $where($e['box']) . ' completely and fill that area with the background';
+            }
+        }
+        // Har so'z buyurtmadagi biror so'zga yaqin bo'lishi kerak (imlo xatosi — imlo tekshiruvchisining ishi, bu yerda — ORTIQCHA so'zlar)
+        $expWords = array_values(array_filter(array_map($norm, preg_split('/\s+/u', implode(' ', $texts)))));
+        $known = static function (string $w) use ($expWords): bool {
+            foreach ($expWords as $x) {
+                if ($x === $w || levenshtein($x, $w) <= max(1, intdiv(strlen($x), 4))) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        foreach ($textEls as $e) {
+            $t = $norm($e['text']);
+            $words = array_values(array_filter(array_map($norm, preg_split('/\s+/u', $e['text']))));
+            $unknown = array_filter($words, static fn ($w) => !$known($w));
+            if ($t !== '' && !str_contains($expected, $t) && count($unknown) > 0) {
+                $problems[] = "Buyurtmada yo'q ortiqcha yozuv: \"{$e['text']}\"";
+                $fix[] = "Remove the extra text \"{$e['text']}\" completely";
+            }
+            [$y1, $x1, $y2, $x2] = $e['box'];
+            if ($x1 < 12 || $y1 < 8 || $x2 > 988 || $y2 > 992) {
+                $problems[] = "\"{$e['text']}\" yozuvi rasm chetiga tegib/kesilib turibdi";
+                $fix[] = "Move the text \"{$e['text']}\" inward so it has a clear margin from the edge";
+            }
+        }
+        for ($a = 0; $a < count($textEls); $a++) {
+            for ($b = $a + 1; $b < count($textEls); $b++) {
+                $i = $inter($textEls[$a]['box'], $textEls[$b]['box']);
+                if ($i > 0.12 * min($area($textEls[$a]['box']), $area($textEls[$b]['box']))) {
+                    $problems[] = "\"{$textEls[$a]['text']}\" va \"{$textEls[$b]['text']}\" yozuvlari ustma-ust";
+                    $fix[] = "Separate the texts \"{$textEls[$a]['text']}\" and \"{$textEls[$b]['text']}\" so they do not overlap at all, with clear space between them";
+                }
+            }
+        }
+        foreach (array_filter($elements, static fn ($e) => $e['type'] === 'face') as $f) {
+            foreach ($textEls as $e) {
+                if ($inter($f['box'], $e['box']) > 0.15 * $area($f['box'])) {
+                    $problems[] = "\"{$e['text']}\" yozuvi odam yuzi ustiga tushgan";
+                    $fix[] = "Move the text \"{$e['text']}\" so it does not cover the person's face";
+                }
+            }
+        }
+        if (!$placement['logo_free']) {
+            $problems[] = "Tepada logo uchun bo'sh joy qolmagan";
+            $fix[] = 'Keep the top 10% of the image free of any text so a logo fits there';
+        }
+        if (!$placement['cta_free']) {
+            $problems[] = "Pastda tugma uchun bo'sh joy qolmagan";
+            $fix[] = 'Keep the bottom 10% of the image free of any text so a button fits there';
+        }
+        return ['problems' => array_values(array_unique($problems)), 'fix' => implode('. ', array_unique($fix)), 'elements' => count($elements)];
     }
 
     /** Ko'ra oladigan model har rasmdagi yozuvni o'qiydi va kutilgan matn bilan solishtiradi. */
@@ -414,7 +538,8 @@ final class GraphicDesigner
     /** Yozuv tekshiruvi + vizual nazorat (bitta rasm yoki bir nechtasi). */
     private function inspect(array $items, int $briefId): array
     {
-        return $this->review($this->checkTexts($items, $briefId), $briefId);
+        // 1) joylashuv o'lchovi + logo/tugmani bo'sh joyga qo'yish, 2) imlo, 3) art-direktor
+        return $this->review($this->checkTexts($this->finish($items, $briefId), $briefId), $briefId);
     }
 
     /**
@@ -438,11 +563,12 @@ final class GraphicDesigner
             if (($rv['action'] ?? '') === 'regenerate' && isset($src[$i]['prompt'])) {
                 // Kompozitsiya yomon — qaytadan, kamchiliklarni aytib
                 $jobs[$i] = array_diff_key($src[$i], ['name' => 1]);
-                $jobs[$i]['prompt'] .= "\nA PREVIOUS ATTEMPT WAS REJECTED BY THE ART DIRECTOR: " . trim(($rv['issues'] ?? '') . ' ' . ($rv['avoid'] ?? ''))
+                $jobs[$i]['prompt'] .= "\nA PREVIOUS ATTEMPT WAS REJECTED BY THE ART DIRECTOR: " . trim(($rv['issues'] ?? '') . ' ' . ($rv['avoid'] ?? '') . ' ' . ($it['layout']['fix'] ?? ''))
                     . ' Make sure no text overlaps other text, faces, the top-centre logo area or the bottom-centre button area; keep generous margins and a clean hierarchy.';
             } else {
                 $textFix = ($it['check']['ok'] ?? true) === false ? (string) ($it['check']['fix'] ?? '') : '';
-                $fix = array_filter([$textFix, (string) ($rv['fix'] ?? '')]);
+                // O'lchov topgan aniq muammolar birinchi (logo, ustma-ust, ortiqcha yozuv), keyin imlo, keyin art-direktor
+                $fix = array_filter([(string) ($it['layout']['fix'] ?? ''), $textFix, (string) ($rv['fix'] ?? '')]);
                 $jobs[$i] = $this->editJob($it, implode('. ', $fix) ?: 'Fix overlapping text: move text so nothing overlaps, keep all text inside the frame with clear margins', $result['format']);
             }
         }
@@ -469,6 +595,7 @@ final class GraphicDesigner
     {
         $rv = $it['review'] ?? null;
         return ($it['check']['ok'] ?? true) === false
+            || !empty($it['layout']['problems'])
             || ($rv !== null && (!empty($rv['overlap']) || (int) $rv['score'] < (int) Env::get('DESIGN_MIN_SCORE', '7') || ($rv['action'] ?? 'ok') !== 'ok'));
     }
 
@@ -476,7 +603,8 @@ final class GraphicDesigner
     private static function rank(array $it): int
     {
         $rv = $it['review'] ?? [];
-        return (($it['check']['ok'] ?? true) === false ? 0 : 100) + (int) ($rv['score'] ?? 7) * 10 - (!empty($rv['overlap']) ? 30 : 0);
+        return (($it['check']['ok'] ?? true) === false ? 0 : 100) + (int) ($rv['score'] ?? 7) * 10 - (!empty($rv['overlap']) ? 30 : 0)
+            - 25 * count($it['layout']['problems'] ?? []); // o'lchangan har muammo — jiddiy jarima
     }
 
     /** Art-direktor (ko'ra oladigan model) har dizaynni professional ko'z bilan baholaydi. */

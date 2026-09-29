@@ -19,6 +19,7 @@ final class Prompts
         'designer/poster' => "Dizayner: nima chiziladi (yozuvlar va 4 xil konsept)",
         'designer/check' => "Dizayner: rasmdagi yozuvlarni tekshirish",
         'designer/review' => "Dizayner: vizual sifat nazorati (ustma-ust, tartib, buzilish)",
+        'designer/layout' => "Dizayner: joylashuv o'lchovchisi (yozuv, logo, yuz koordinatalari)",
         'designer/system' => "Dizayner: uslub namunalaridan dizayn tizimi",
         'designer/style' => 'Dizayner: grid namunalaridan uslub profili',
         'manager/orchestrate' => "Manager: Telegram suhbat va topshiriq berish",
