@@ -113,6 +113,12 @@ class GeminiMock
                    ], 'alt_text' => 'Istanbul haqida karusel']
                 : ['kicker' => '5 kunlik tur', 'headline' => 'ISTANBUL 775$ DAN', 'accent' => 'ISTANBUL', 'subline' => 'Har kuni uchish · 5 kun', 'price' => '775$ dan', 'badge' => 'QAYNOQ TUR',
                    'concepts' => $concepts, 'slides' => [], 'alt_text' => "Istanbul, Galata minorasi oqshom yorug'ida"];
+        } elseif (str_contains($system, 'vizual sifat nazoratchisisan')) {
+            // Sinov: ko'p rasmli tekshiruvda 3-rasm xunuk (qayta chizish), qolganlari yaxshi; bitta rasm (tuzatilgan) — yaxshi
+            $n = max(1, count($images));
+            $data = ['results' => array_map(static fn ($i) => $n > 1 && $i === 2
+                ? ['index' => 2, 'score' => 4, 'overlap' => true, 'issues' => 'Sarlavha odam yuzi ustiga tushgan va pastki tugmaga tegib turibdi', 'action' => 'regenerate', 'fix' => '', 'avoid' => 'Keep the headline clear of the face and the bottom button']
+                : ['index' => $i, 'score' => 8, 'overlap' => false, 'issues' => '', 'action' => 'ok', 'fix' => '', 'avoid' => ''], range(0, $n - 1))];
         } elseif (str_contains($system, 'matn tekshiruvchisisan')) {
             // Sinov: ikkinchi rasmda xato bor deb ko'rsatamiz (UI dagi ogohlantirishni tekshirish uchun)
             $data = ['results' => array_map(static fn ($i) => $i === 1

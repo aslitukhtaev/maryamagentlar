@@ -118,15 +118,27 @@ function check_badge(?array $check): string
         : '<span class="chk bad" title="' . e($check['found'] ?? '') . '">⚠ ' . e($check['issues'] ?: 'Yozuvda xato bo\'lishi mumkin') . '</span>';
 }
 
-/** "Tuzatish" formasi: AI rasmni aytilgancha o'zgartiradi ($target: v — variant, s — karusel slaydi). */
-function fix_form(int $id, int $index, ?array $check, string $return, string $target = 'v'): string
+/** Art-direktor bahosi belgisi: "🎨 8/10" (past bo'lsa — sababi bilan). */
+function review_badge(?array $review): string
 {
-    $bad = $check && !$check['ok'];
+    if ($review === null) {
+        return '';
+    }
+    $good = (int) $review['score'] >= 7 && empty($review['overlap']);
+    return '<span class="chk ' . ($good ? 'ok' : 'bad') . '" title="Art-direktor bahosi">🎨 ' . (int) $review['score'] . '/10'
+        . (!$good && $review['issues'] !== '' ? ' — ' . e($review['issues']) : '') . '</span>';
+}
+
+/** "Tuzatish" formasi: AI rasmni aytilgancha o'zgartiradi ($target: v — variant, s — karusel slaydi). */
+function fix_form(int $id, int $index, ?array $check, string $return, string $target = 'v', ?array $review = null): string
+{
+    $visual = $review && ((int) $review['score'] < 7 || !empty($review['overlap'])) && $review['issues'] !== '' ? $review['issues'] : '';
+    $bad = ($check && !$check['ok']) || $visual !== '';
     return '<details class="fix"' . ($bad ? ' open' : '') . '><summary>✏️ Tuzatish</summary><form method="post" ' . busy_attr() . '>' . csrf_field()
         . '<input type="hidden" name="action" value="design_fix"><input type="hidden" name="id" value="' . $id . '">'
         . '<input type="hidden" name="i" value="' . $index . '"><input type="hidden" name="target" value="' . $target . '"><input type="hidden" name="return" value="' . e($return) . '">'
         . '<textarea name="instruction" rows="2" placeholder="Masalan: narxni kattaroq qil · fonni yorqinroq qil · ISTANBUL so\'zini to\'g\'rila">'
-        . e($bad && $check['issues'] ? 'Yozuvni to\'g\'rila: ' . $check['issues'] : '') . '</textarea>'
+        . e(trim(($check && !$check['ok'] && $check['issues'] ? 'Yozuvni to\'g\'rila: ' . $check['issues'] . ' ' : '') . ($visual !== '' ? 'Tuzat: ' . $visual : ''))) . '</textarea>'
         . '<button type="submit" class="ghost">Tuzatish</button><span class="busy muted small" hidden>AI tuzatmoqda (20-60 soniya)…</span></form></details>';
 }
 
@@ -160,7 +172,7 @@ function design_view(array $design): void
             $isChosen = $chosen === $i;
             $src = e(url(['d' => $id, 'v' => $i]));
             echo '<div class="vcard' . ($isChosen ? ' chosen' : '') . '"><a href="' . $src . '" target="_blank"><img src="' . $src . '" alt="' . e($v['concept']) . '" loading="lazy"></a>'
-               . '<div class="vmeta"><b>' . ($i + 1) . '. ' . e($v['concept']) . '</b>' . check_badge($v['check'] ?? null) . '</div><div class="vact">';
+               . '<div class="vmeta"><b>' . ($i + 1) . '. ' . e($v['concept']) . '</b>' . review_badge($v['review'] ?? null) . check_badge($v['check'] ?? null) . '</div><div class="vact">';
             if ($isChosen) {
                 echo '<span class="chk ok">★ ' . ($carousel ? 'Muqova' : 'Tanlangan') . '</span>';
             } else {
@@ -170,7 +182,7 @@ function design_view(array $design): void
                    . ($carousel ? '<span class="busy muted small" hidden>Slaydlar qayta chizilmoqda (1-2 daqiqa)…</span>' : '') . '</form>';
             }
             echo '<a class="ghost-link" href="' . e(url(['d' => $id, 'v' => $i, 'dl' => 1])) . '">⬇ Yuklab olish</a></div>'
-               . fix_form($id, $i, $v['check'] ?? null, $return, 'v') . '</div>';
+               . fix_form($id, $i, $v['check'] ?? null, $return, 'v', $v['review'] ?? null) . '</div>';
         }
         echo '</div>';
     }
@@ -183,8 +195,8 @@ function design_view(array $design): void
                 continue;
             }
             echo '<div class="slide"><a href="' . e(url(['d' => $id, 's' => $i, 'dl' => 1])) . '" title="Yuklab olish"><img src="' . e(url(['d' => $id, 's' => $i])) . '" alt="' . ($i + 1) . '-slayd" loading="lazy"></a>'
-               . '<div class="vmeta"><b>' . ($i + 1) . '-slayd</b>' . check_badge($meta['check'] ?? null) . '</div>'
-               . ($meta && $i > 0 ? fix_form($id, $i, $meta['check'] ?? null, $return, 's') : ($i === 0 ? '<p class="small muted">Muqova — yuqorida tuzatiladi</p>' : '')) . '</div>';
+               . '<div class="vmeta"><b>' . ($i + 1) . '-slayd</b>' . review_badge($meta['review'] ?? null) . check_badge($meta['check'] ?? null) . '</div>'
+               . ($meta && $i > 0 ? fix_form($id, $i, $meta['check'] ?? null, $return, 's', $meta['review'] ?? null) : ($i === 0 ? '<p class="small muted">Muqova — yuqorida tuzatiladi</p>' : '')) . '</div>';
         }
         echo '</div>';
         if (!empty($design['missing'])) {

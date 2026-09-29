@@ -209,7 +209,7 @@ function limitPhotos(el) {
     <li><b>Art-direktor</b> (AI) g'oyangizni, dizayn tizimini va fotolarni ko'rib, qisqa yozuvlar va 4 xil g'oya tanlaydi (qahramon obyekt yoki odam, sarlavha joylashuvi).</li>
     <li><b>Rasm modeli</b> 4 ta variantni bir vaqtda chizadi — uslub namunasi darajasida, yozuvlari bilan.</li>
     <li>Haqiqiy <b>logo</b> tepada markazga, pastga bir xil <b>tugma</b> (narxli postda telefon, boshqasida "Batafsil izohda") tizim tomonidan qo'yiladi.</li>
-    <li><b>Tekshiruvchi</b> har rasmdagi yozuvni o'qiydi: xato bo'lsa "⚠" belgisi va tayyor tuzatish taklifi chiqadi.</li>
+    <li><b>Imlo tekshiruvchisi</b> har rasmdagi yozuvni o'qiydi; <b>art-direktor</b> dizaynni baholaydi (🎨 1-10): yozuvlar ustma-ust emasmi, kesilmaganmi, tartibli va o'qiladimi, yuz va buyumlar buzilmaganmi. Kamchiligi bor rasmni AI sizga ko'rsatishdan oldin o'zi tuzatadi yoki qayta chizadi — yaxshirog'i qoladi.</li>
     <li>Siz <b>tanlaysiz</b> yoki <b>tuzattirasiz</b> ("narxni kattaroq qil", "fonni kechki qil") va Telegramga yuborasiz.</li>
   </ol>
   <p class="muted">Karuselda avval muqova chiziladi, qolgan slaydlar aynan shu uslubda. AI rasm chiza olmasa, oddiy shablon chiziladi (sababi ko'rsatiladi).</p>

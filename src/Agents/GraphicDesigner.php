@@ -241,14 +241,14 @@ final class GraphicDesigner
                 continue;
             }
             $result['variants'][] = $this->saveImage($img, $result, $jobs[$i]['name'], $frame['texts'], $briefId, $frame['cta']);
+            $src[count($result['variants']) - 1] = $jobs[$i];
         }
         if (!$result['variants']) {
             throw new RuntimeException($errors[0] ?? 'rasm qaytmadi');
         }
-        $say('3/4 Yozuvlar tekshirilmoqda...');
-        $result['variants'] = $this->autoFix($this->checkTexts($result['variants'], $briefId), $result, $briefId, $say);
-        // Yozuvi to'g'ri chiqqanlar birinchi
-        usort($result['variants'], static fn ($a, $b) => (int) (($b['check']['ok'] ?? true) === true) <=> (int) (($a['check']['ok'] ?? true) === true));
+        $result['variants'] = $this->quality($result['variants'], $src ?? [], $result, $briefId, $say);
+        // Eng yaxshisi birinchi: yozuvi to'g'ri va art-direktor bahosi yuqori
+        usort($result['variants'], static fn ($a, $b) => self::rank($b) <=> self::rank($a));
         $result['card_path'] = $result['variants'][0]['path'];
         $result['card_layout'] = count($result['frames']) > 1 ? 'carousel' : 'ai';
         if (count($result['frames']) > 1) {
@@ -302,7 +302,7 @@ final class GraphicDesigner
             $drawn[$i] = $this->saveImage($img, $result, ($i + 1) . '-slayd', $frames[$i]['texts'], $briefId, $frames[$i]['cta']);
         }
         if ($drawn) {
-            $drawn = $this->autoFix($this->checkTexts($drawn, $briefId), $result, $briefId, $say);
+            $drawn = $this->quality($drawn, $jobs, $result, $briefId, $say);
         }
         $items = array_replace($items, $drawn);
         ksort($items);
@@ -411,20 +411,40 @@ final class GraphicDesigner
         return $items;
     }
 
-    /**
-     * Yozuvida xato topilgan rasmlar egasiga ko'rsatilishidan oldin bir marta avtomatik tuzatiladi
-     * (rasm modeli faqat yozuvni to'g'rilaydi). Tuzatilgani ham xato bo'lsa — yaxshirog'i qoladi.
-     */
-    private function autoFix(array $items, array $result, int $briefId, callable $say): array
+    /** Yozuv tekshiruvi + vizual nazorat (bitta rasm yoki bir nechtasi). */
+    private function inspect(array $items, int $briefId): array
     {
-        $bad = array_filter($items, static fn ($it) => ($it['check']['ok'] ?? true) === false && is_file((string) ($it['raw'] ?? '')));
+        return $this->review($this->checkTexts($items, $briefId), $briefId);
+    }
+
+    /**
+     * SIFAT NAZORATI: imlo tekshiruvchisi + art-direktor (ustma-ust yozuv, kesilish, tartib, buzilish, uslub).
+     * Talabga javob bermaganlari egasiga ko'rsatilishidan oldin bir marta tuzatiladi: kichik kamchilik — tahrir,
+     * kompozitsiya yomon — kamchiliklarni hisobga olib qayta chiziladi. Yangi versiya yaxshiroq bo'lsagina almashtiriladi.
+     * @param array<int, array> $src rasmni chizgan topshiriqlar (qayta chizish uchun), $items bilan bir xil kalitlar
+     */
+    private function quality(array $items, array $src, array $result, int $briefId, callable $say): array
+    {
+        $say('3/4 Yozuvlar va dizayn sifati tekshirilmoqda...');
+        $items = $this->inspect($items, $briefId);
+        $bad = array_filter($items, fn ($it) => $this->needsWork($it) && is_file((string) ($it['raw'] ?? '')));
         if (!$bad || Env::get('DESIGN_AUTOFIX', '1') === '0') {
             return $items;
         }
-        $say('3/4 ' . count($bad) . " ta rasmda yozuv xatosi — AI o'zi tuzatmoqda...");
+        $say('3/4 ' . count($bad) . " ta rasmda kamchilik topildi (ustma-ust yozuv, tartib yoki imlo) — AI o'zi tuzatmoqda...");
         $jobs = [];
         foreach ($bad as $i => $it) {
-            $jobs[$i] = $this->editJob($it, (string) (($it['check']['fix'] ?? '') ?: 'Fix the spelling of all text on the image'), $result['format']);
+            $rv = $it['review'] ?? [];
+            if (($rv['action'] ?? '') === 'regenerate' && isset($src[$i]['prompt'])) {
+                // Kompozitsiya yomon — qaytadan, kamchiliklarni aytib
+                $jobs[$i] = array_diff_key($src[$i], ['name' => 1]);
+                $jobs[$i]['prompt'] .= "\nA PREVIOUS ATTEMPT WAS REJECTED BY THE ART DIRECTOR: " . trim(($rv['issues'] ?? '') . ' ' . ($rv['avoid'] ?? ''))
+                    . ' Make sure no text overlaps other text, faces, the top-centre logo area or the bottom-centre button area; keep generous margins and a clean hierarchy.';
+            } else {
+                $textFix = ($it['check']['ok'] ?? true) === false ? (string) ($it['check']['fix'] ?? '') : '';
+                $fix = array_filter([$textFix, (string) ($rv['fix'] ?? '')]);
+                $jobs[$i] = $this->editJob($it, implode('. ', $fix) ?: 'Fix overlapping text: move text so nothing overlaps, keep all text inside the frame with clear margins', $result['format']);
+            }
         }
         $fixed = [];
         foreach ($this->ai->generateImages($jobs) as $i => $img) {
@@ -435,9 +455,65 @@ final class GraphicDesigner
         if (!$fixed) {
             return $items;
         }
-        $checked = $this->checkTexts(array_values($fixed), $briefId);
+        $checked = $this->inspect(array_values($fixed), $briefId);
         foreach (array_keys($fixed) as $n => $i) {
-            $items[$i] = $checked[$n] + ['autofixed' => true];
+            if (self::rank($checked[$n]) >= self::rank($items[$i])) { // yaxshirog'i qoladi
+                $items[$i] = $checked[$n] + ['autofixed' => true];
+            }
+        }
+        return $items;
+    }
+
+    /** Tuzatish kerakmi: imlo xato, ustma-ust yozuv yoki art-direktor bahosi past. */
+    private function needsWork(array $it): bool
+    {
+        $rv = $it['review'] ?? null;
+        return ($it['check']['ok'] ?? true) === false
+            || ($rv !== null && (!empty($rv['overlap']) || (int) $rv['score'] < (int) Env::get('DESIGN_MIN_SCORE', '7') || ($rv['action'] ?? 'ok') !== 'ok'));
+    }
+
+    /** Saralash bahosi: to'g'ri yozuv eng muhim, keyin art-direktor bahosi, ustma-ust yozuv — jarima. */
+    private static function rank(array $it): int
+    {
+        $rv = $it['review'] ?? [];
+        return (($it['check']['ok'] ?? true) === false ? 0 : 100) + (int) ($rv['score'] ?? 7) * 10 - (!empty($rv['overlap']) ? 30 : 0);
+    }
+
+    /** Art-direktor (ko'ra oladigan model) har dizaynni professional ko'z bilan baholaydi. */
+    private function review(array $items, int $briefId): array
+    {
+        $images = [];
+        $map = [];
+        foreach ($items as $i => $item) {
+            $im = @imagecreatefromjpeg((string) $item['path']);
+            if (!$im) {
+                continue;
+            }
+            ob_start();
+            imagejpeg(imagescale($im, 720), null, 84);
+            $images[] = ['mime' => 'image/jpeg', 'data' => base64_encode((string) ob_get_clean())];
+            $map[] = ['index' => count($images) - 1, 'item' => $i, 'texts' => array_values(array_filter($item['texts'] ?? []))];
+        }
+        if (!$images) {
+            return $items;
+        }
+        try {
+            $data = Prompts::ask($this->ai, $this->store, 'designer/review', [
+                'design_system' => DesignSystem::get($this->store)['summary'],
+                'images' => array_map(static fn ($m) => ['index' => $m['index'], 'rasmdagi_yozuvlar' => $m['texts']], $map),
+            ], 0.1, true, $briefId, self::NAME, 'review', $images);
+        } catch (Throwable) {
+            return $items; // nazorat ishlamasa — rasmlar baribir ko'rsatiladi
+        }
+        foreach ((array) ($data['results'] ?? []) as $r) {
+            $m = $map[(int) ($r['index'] ?? -1)] ?? null;
+            if ($m !== null) {
+                $items[$m['item']]['review'] = [
+                    'score' => max(1, min(10, (int) ($r['score'] ?? 7))), 'overlap' => (bool) ($r['overlap'] ?? false),
+                    'issues' => trim((string) ($r['issues'] ?? '')), 'action' => in_array($r['action'] ?? 'ok', ['ok', 'edit', 'regenerate'], true) ? $r['action'] : 'ok',
+                    'fix' => trim((string) ($r['fix'] ?? '')), 'avoid' => trim((string) ($r['avoid'] ?? '')),
+                ];
+            }
         }
         return $items;
     }
@@ -497,7 +573,7 @@ final class GraphicDesigner
             throw new RuntimeException('AI tuzata olmadi: ' . $img);
         }
         $name = $slide ? $item['concept'] : 'Tuzatilgan: ' . mb_strimwidth($instruction, 0, 40, '…');
-        $new = $this->checkTexts([$this->saveImage($img, $d, $name, $item['texts'] ?? [], (int) $d['brief_id'], $item['cta'] ?? null)], (int) $d['brief_id'])[0];
+        $new = $this->inspect([$this->saveImage($img, $d, $name, $item['texts'] ?? [], (int) $d['brief_id'], $item['cta'] ?? null)], (int) $d['brief_id'])[0];
         if ($slide) {
             $d['slide_meta'][$index] = $new;
             $d['slides'][$index] = $new['path'];
